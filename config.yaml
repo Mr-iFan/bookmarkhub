@@ -1,0 +1,131 @@
+# BookmarkHub 配置文件示例
+# 配置文件支持继承机制：子级可以继承父级的 proxy、headers 和 heartbeat 设置
+
+# 全局设置
+settings:
+  # 默认心跳检测频率（Cron 表达式）
+  # 格式：秒 分 时 日 月 星期
+  # 示例：0 */30 * * * * 表示每30分钟检测一次
+  heartbeat: "0 */30 * * * *"
+  
+  # 默认代理地址（可选，为空则不使用代理）
+  # 格式：http://proxy.example.com:8080 或 https://proxy.example.com:8080
+  proxy: ""
+  
+  # 默认请求头（可选）
+  # 所有书签项都会继承这些请求头，除非在子级中覆盖或禁用
+  headers:
+    User-Agent: "BookmarkHub/1.0"
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+# 书签组列表
+groups:
+  # 示例组1：开发工具
+  - name: "开发工具"
+    # 组级别的代理（可选，会覆盖全局代理）
+    # proxy: "http://proxy.example.com:8080"
+    
+    # 组级别的请求头（可选，会合并到全局请求头）
+    # headers:
+    #   Authorization: "Bearer token123"
+    
+    # 组级别的心跳检测频率（可选，会覆盖全局设置）
+    # heartbeat: "0 */10 * * * *"
+    
+    # 该组下的书签项
+    items:
+      - name: "GitHub"
+        url: "https://github.com"
+        # 自定义心跳检测频率（可选，会覆盖组和全局设置）
+        heartbeat: "0 */10 * * * *"
+        # 自定义图标（可选，可以是 URL 或本地路径）
+        # icon: "https://github.com/favicon.ico"
+      
+      - name: "GitLab"
+        url: "https://gitlab.com"
+        # 如果不需要自定义设置，可以只写 name 和 url
+      
+      - name: "Stack Overflow"
+        url: "https://stackoverflow.com"
+        # 自定义代理（可选，会覆盖组和全局代理）
+        # proxy: "http://custom-proxy.com:8080"
+      
+      - name: "Docker Hub"
+        url: "https://hub.docker.com"
+        # 自定义请求头（可选，会合并到组和全局请求头）
+        # headers:
+        #   Custom-Header: "custom-value"
+        #   要禁用继承的某个请求头，可以设置为 false
+        #   User-Agent: false
+
+  # 示例组2：技术博客（演示组级别配置）
+  - name: "技术博客"
+    # 组级别代理
+    proxy: "http://proxy.example.com:8080"
+    
+    # 组级别请求头
+    headers:
+      Authorization: "Bearer token123"
+      X-Custom-Header: "group-level-value"
+    
+    items:
+      - name: "技术博客1"
+        url: "https://blog.example.com"
+        # 继承组的 proxy 和 headers
+      
+      - name: "技术博客2"
+        url: "https://blog2.example.com"
+        # 禁用继承的 headers，使用自定义 headers
+        headers:
+          _disabled: true  # 禁用所有继承的 headers
+          Custom-Header: "custom-value"
+          # 或者只禁用特定的 header
+          # Authorization: false
+          # X-Custom-Header: false
+
+  # 示例组3：嵌套组（支持多级嵌套）
+  - name: "编程语言"
+    items:
+      - name: "Python 官网"
+        url: "https://www.python.org"
+      
+      - name: "Go 官网"
+        url: "https://go.dev"
+    
+    # 嵌套的子组
+    groups:
+      - name: "Python 资源"
+        items:
+          - name: "PyPI"
+            url: "https://pypi.org"
+          - name: "Python 文档"
+            url: "https://docs.python.org"
+      
+      - name: "Go 资源"
+        items:
+          - name: "Go 包仓库"
+            url: "https://pkg.go.dev"
+          - name: "Go 文档"
+            url: "https://pkg.go.dev/std"
+
+  # 示例组4：使用 include 引入外部配置文件
+  - name: "外部配置"
+    # include 可以引入其他 YAML 文件
+    # 被引入的文件应该是一个 BookmarkGroup 结构
+    # include: "configs/external-bookmarks.yaml"
+    items:
+      - name: "示例网站"
+        url: "https://example.com"
+        # 单个书签项也可以使用 include
+        # include: "configs/single-bookmark.yaml"
+
+# 配置说明：
+# 1. 继承优先级：书签项 > 组 > 全局设置
+# 2. headers 合并规则：子级的 headers 会合并到父级，设置为 false 可以禁用继承的 header
+# 3. proxy 覆盖规则：子级的 proxy 会完全覆盖父级的 proxy（如果设置了的话）
+# 4. heartbeat 覆盖规则：子级的 heartbeat 会完全覆盖父级的 heartbeat（如果设置了的话）
+# 5. include 功能：支持引入外部配置文件，最大深度为 3 层
+# 6. Cron 表达式格式：秒 分 时 日 月 星期
+#    - 示例：0 */30 * * * * 表示每30分钟
+#    - 示例：0 0 */1 * * * 表示每小时
+#    - 示例：0 0 0 * * * 表示每天午夜
