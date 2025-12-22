@@ -23,7 +23,7 @@ func NewBookmarkController(db *gorm.DB) *BookmarkController {
 // GetBookmarks 获取所有书签（扁平列表）
 func (c *BookmarkController) GetBookmarks(ctx *gin.Context) {
 	var bookmarks []model.Bookmark
-	if err := c.db.Find(&bookmarks).Error; err != nil {
+	if err := c.db.Find(&bookmarks).Order("idx ASC").Error; err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -56,7 +56,7 @@ func (c *BookmarkController) GetBookmark(ctx *gin.Context) {
 // GetBookmarkTree 获取嵌套树形结构
 func (c *BookmarkController) GetBookmarkTree(ctx *gin.Context) {
 	var bookmarks []model.Bookmark
-	if err := c.db.Where("parent_id IS NULL").Preload("Children").Find(&bookmarks).Error; err != nil {
+	if err := c.db.Where("parent_id IS NULL").Preload("Children").Order("idx ASC").Find(&bookmarks).Error; err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -72,8 +72,8 @@ func (c *BookmarkController) GetBookmarkTree(ctx *gin.Context) {
 // loadChildren 递归加载子节点
 func (c *BookmarkController) loadChildren(bookmark *model.Bookmark) {
 	var children []model.Bookmark
-	c.db.Where("parent_id = ?", bookmark.ID).Find(&children)
-	
+	c.db.Where("parent_id = ?", bookmark.ID).Order("idx ASC").Find(&children)
+
 	bookmark.Children = children
 	for i := range bookmark.Children {
 		c.loadChildren(&bookmark.Children[i])
@@ -83,8 +83,7 @@ func (c *BookmarkController) loadChildren(bookmark *model.Bookmark) {
 // HealthCheck 系统健康检查
 func (c *BookmarkController) HealthCheck(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
-		"status": "ok",
+		"status":  "ok",
 		"message": "BookmarkHub is running",
 	})
 }
-

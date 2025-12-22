@@ -14,6 +14,7 @@ type Bookmark struct {
 	Name     string  `gorm:"not null;index" json:"name"`
 	URL      *string `gorm:"uniqueIndex" json:"url"` // 允许为NULL，group节点为NULL，书签项为实际URL
 	Icon     string  `gorm:"type:text" json:"icon"`  // base64 编码的图标
+	Idx      int     `gorm:"default:0" json:"idx"`   // 排序字段
 	ParentID *uint   `gorm:"index" json:"parent_id"` // 树形结构父节点
 
 	// 状态字段

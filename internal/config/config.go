@@ -25,6 +25,7 @@ type GlobalSettings struct {
 type BookmarkGroup struct {
 	Name      string                 `yaml:"name"`
 	Proxy     string                 `yaml:"proxy,omitempty"`
+	Idx       int                    `yaml:"idx,omitempty"`
 	Headers   map[string]interface{} `yaml:"headers,omitempty"` // 支持 false 值禁用
 	Heartbeat string                 `yaml:"heartbeat,omitempty"`
 	Groups    []BookmarkGroup        `yaml:"groups,omitempty"`
@@ -36,6 +37,7 @@ type BookmarkGroup struct {
 type BookmarkItem struct {
 	Name      string                 `yaml:"name"`
 	URL       string                 `yaml:"url"`
+	Idx       int                    `yaml:"idx,omitempty"`
 	Icon      string                 `yaml:"icon,omitempty"` // 图标路径或 URL
 	Proxy     string                 `yaml:"proxy,omitempty"`
 	Headers   map[string]interface{} `yaml:"headers,omitempty"` // 支持 false 值禁用

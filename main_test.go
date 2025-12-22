@@ -52,6 +52,7 @@ func TestConfigSync(t *testing.T) {
 		log.Printf("Failed to reload config: %v", err)
 		return
 	}
+
 	// 触发同步
 	if err := service.SyncConfigToDB(db, cfg); err != nil {
 		log.Printf("Failed to sync config: %v", err)

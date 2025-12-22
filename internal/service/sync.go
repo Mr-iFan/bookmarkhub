@@ -47,6 +47,7 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 				groupNode = model.Bookmark{
 					Name:     group.Name,
 					URL:      nil, // group节点URL为NULL
+					Idx:      group.Idx,
 					Icon:     "",
 					ParentID: parentID,
 					Proxy:    "",
@@ -64,7 +65,10 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 
 			// 递归处理子组
 			if len(group.Groups) > 0 {
-				for _, subGroup := range group.Groups {
+				for idx, subGroup := range group.Groups {
+					if subGroup.Idx == 0 {
+						subGroup.Idx = idx
+					}
 					_, err := createOrGetGroup(subGroup, groupID)
 					if err != nil {
 						return nil, err
@@ -75,7 +79,10 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 			return groupID, nil
 		}
 		// 1. 创建所有group节点
-		for _, group := range cfg.Groups {
+		for idx, group := range cfg.Groups {
+			if group.Idx == 0 {
+				group.Idx = idx
+			}
 			_, err := createOrGetGroup(group, nil)
 			if err != nil {
 				return err
@@ -97,13 +104,17 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 				}
 
 				// 处理当前组的 items
-				for _, item := range group.Items {
+				for idx, item := range group.Items {
+					if item.Idx == 0 {
+						item.Idx = idx
+					}
 					effectiveConfig := cfg.GetEffectiveConfig(&item, &group)
 					headersJSON, _ := config.HeadersToJSON(effectiveConfig.Headers)
 
 					url := item.URL // 将string转换为*string
 					bookmark := &model.Bookmark{
 						Name:          item.Name,
+						Idx:           item.Idx,
 						URL:           &url, // 书签项有实际URL
 						Icon:          item.Icon,
 						ParentID:      groupID, // items的parent指向group节点
@@ -159,6 +170,7 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 				// 更新现有书签
 				if err := tx.Model(&model.Bookmark{}).Where("id = ?", existingID).Updates(map[string]interface{}{
 					"name":           bm.Name,
+					"idx":            bm.Idx,
 					"icon":           bm.Icon,
 					"parent_id":      bm.ParentID,
 					"proxy":          bm.Proxy,
