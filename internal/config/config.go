@@ -10,7 +10,7 @@ import (
 
 // Config 根配置结构
 type Config struct {
-	Settings GlobalSettings `yaml:"settings"`
+	Settings GlobalSettings  `yaml:"settings"`
 	Groups   []BookmarkGroup `yaml:"groups"`
 }
 
@@ -23,24 +23,24 @@ type GlobalSettings struct {
 
 // BookmarkGroup 书签组（支持递归嵌套）
 type BookmarkGroup struct {
-	Name     string          `yaml:"name"`
-	Proxy    string          `yaml:"proxy,omitempty"`
-	Headers  map[string]interface{} `yaml:"headers,omitempty"` // 支持 false 值禁用
-	Heartbeat string         `yaml:"heartbeat,omitempty"`
-	Groups   []BookmarkGroup `yaml:"groups,omitempty"`
-	Items    []BookmarkItem  `yaml:"items,omitempty"`
-	Include  string          `yaml:"include,omitempty"` // 包含其他配置文件
+	Name      string                 `yaml:"name"`
+	Proxy     string                 `yaml:"proxy,omitempty"`
+	Headers   map[string]interface{} `yaml:"headers,omitempty"` // 支持 false 值禁用
+	Heartbeat string                 `yaml:"heartbeat,omitempty"`
+	Groups    []BookmarkGroup        `yaml:"groups,omitempty"`
+	Items     []BookmarkItem         `yaml:"items,omitempty"`
+	Include   string                 `yaml:"include,omitempty"` // 包含其他配置文件
 }
 
 // BookmarkItem 书签项
 type BookmarkItem struct {
-	Name     string                 `yaml:"name"`
-	URL      string                 `yaml:"url"`
-	Icon     string                 `yaml:"icon,omitempty"`     // 图标路径或 URL
-	Proxy    string                 `yaml:"proxy,omitempty"`
-	Headers  map[string]interface{} `yaml:"headers,omitempty"` // 支持 false 值禁用
-	Heartbeat string                `yaml:"heartbeat,omitempty"`
-	Include  string                 `yaml:"include,omitempty"` // 包含其他配置文件
+	Name      string                 `yaml:"name"`
+	URL       string                 `yaml:"url"`
+	Icon      string                 `yaml:"icon,omitempty"` // 图标路径或 URL
+	Proxy     string                 `yaml:"proxy,omitempty"`
+	Headers   map[string]interface{} `yaml:"headers,omitempty"` // 支持 false 值禁用
+	Heartbeat string                 `yaml:"heartbeat,omitempty"`
+	Include   string                 `yaml:"include,omitempty"` // 包含其他配置文件
 }
 
 const (
@@ -152,4 +152,3 @@ func resolveGroupIncludes(group *BookmarkGroup, baseDir string, depth int) error
 
 	return nil
 }
-

@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"log"
 
 	"bookmarkhub/internal/config"
 	"bookmarkhub/internal/model"
@@ -26,7 +27,7 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 		var createOrGetGroup func(group config.BookmarkGroup, parentID *uint) (*uint, error)
 		createOrGetGroup = func(group config.BookmarkGroup, parentID *uint) (*uint, error) {
 			key := GroupKey{Name: group.Name, ParentID: parentID}
-			
+
 			// 检查是否已存在
 			if id, exists := groupMap[key]; exists {
 				return id, nil
@@ -40,7 +41,7 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 			} else {
 				err = tx.Where("name = ? AND url IS NULL AND parent_id = ?", group.Name, parentID).First(&groupNode).Error
 			}
-			
+
 			if err == gorm.ErrRecordNotFound {
 				// 创建新的group节点（URL为NULL）
 				groupNode = model.Bookmark{
@@ -57,10 +58,10 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 			} else if err != nil {
 				return nil, fmt.Errorf("failed to query group node %s: %w", group.Name, err)
 			}
-			
+
 			groupID := &groupNode.ID
 			groupMap[key] = groupID
-			
+
 			// 递归处理子组
 			if len(group.Groups) > 0 {
 				for _, subGroup := range group.Groups {
@@ -70,7 +71,7 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 					}
 				}
 			}
-			
+
 			return groupID, nil
 		}
 		// 1. 创建所有group节点
@@ -84,7 +85,7 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 		// 2. 收集所有item节点（书签）
 		var allBookmarks []*model.Bookmark
 		urlSet := make(map[string]bool)
-		
+
 		var collectItems func(groups []config.BookmarkGroup, parentID *uint) error
 		collectItems = func(groups []config.BookmarkGroup, parentID *uint) error {
 			for _, group := range groups {
@@ -123,23 +124,31 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 			}
 			return nil
 		}
-		
+
 		if err := collectItems(cfg.Groups, nil); err != nil {
 			return err
 		}
 
 		// 3. 获取数据库中现有的所有书签（有URL的，即URL不为NULL的）
 		var existingBookmarks []model.Bookmark
-		if err := tx.Where("url IS NOT NULL").Find(&existingBookmarks).Error; err != nil {
+		if err := tx.Debug().Where("url IS NOT NULL").Find(&existingBookmarks).Error; err != nil {
 			return fmt.Errorf("failed to query existing bookmarks: %w", err)
 		}
-
+		// log.Printf("existingBookmarks: %v", existingBookmarks)
 		existingURLSet := make(map[string]uint) // URL -> ID
 		for _, bm := range existingBookmarks {
 			if bm.URL != nil {
-				existingURLSet[*bm.URL] = bm.ID
+				// 不存在 urlset 中，删除
+				if !urlSet[*bm.URL] {
+					if err := deleteBookmarkCascade(tx, bm.ID); err != nil {
+						return fmt.Errorf("failed to delete bookmark %s: %w", *bm.URL, err)
+					}
+				} else {
+					existingURLSet[*bm.URL] = bm.ID
+				}
 			}
 		}
+		log.Printf("existingURLSet: %v", existingURLSet)
 
 		// 4. 更新或创建书签
 		for _, bm := range allBookmarks {
@@ -172,6 +181,8 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 					return fmt.Errorf("failed to create bookmark %s: %w", urlStr, err)
 				}
 			}
+			// 添加到existingURLSet
+			existingURLSet[*bm.URL] = bm.ID
 		}
 
 		// 5. 删除 YAML 中不存在的书签（只删除有URL的书签，不删除group节点）
@@ -188,10 +199,20 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 		}
 
 		// 6. 清理不再使用的group节点（没有子项的group节点）
+		// TODO 需要查询三次，因为有多级菜单
 		var orphanGroups []model.Bookmark
-		if err := tx.Where("url IS NULL AND id NOT IN (SELECT DISTINCT parent_id FROM bookmarks WHERE parent_id IS NOT NULL)").Find(&orphanGroups).Error; err == nil {
-			for _, group := range orphanGroups {
-				tx.Delete(&group)
+		// 遍历三次以清理所有孤立的 group 节点
+		for i := 0; i < 3; i++ {
+			orphanGroups = nil // 清空切片，防止累积之前的结果
+			if err := tx.Where("url IS NULL AND id NOT IN (SELECT DISTINCT parent_id FROM bookmarks WHERE parent_id IS NOT NULL)").Find(&orphanGroups).Error; err == nil {
+				if len(orphanGroups) == 0 {
+					break
+				}
+				log.Printf("第%d次清理，找到 %d 个不存在的模块", i+1, len(orphanGroups))
+				for _, group := range orphanGroups {
+					log.Printf("Deleting orphan group: %s", group.Name)
+					tx.Delete(&group)
+				}
 			}
 		}
 

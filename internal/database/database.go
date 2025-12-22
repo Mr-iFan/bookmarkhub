@@ -21,7 +21,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 
 	// 使用 glebarez/sqlite 驱动
 	dsn := dbPath + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
-	
+
 	db, err := gorm.Open(sqlite.Dialector{
 		DSN: dsn,
 	}, &gorm.Config{
@@ -38,7 +38,6 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	}
 	sqlDB.SetMaxOpenConns(10)
 	sqlDB.SetMaxIdleConns(5)
-
 	// 自动迁移
 	if err := AutoMigrate(db); err != nil {
 		return nil, err
@@ -54,4 +53,3 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.SystemLog{},
 	)
 }
-

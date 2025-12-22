@@ -108,7 +108,6 @@ func main() {
 	// API 路由
 	api := r.Group("/api")
 	{
-		api.GET("/bookmarks", bookmarkCtrl.GetBookmarks)
 		api.GET("/bookmarks/tree", bookmarkCtrl.GetBookmarkTree)
 		api.GET("/bookmarks/:id", bookmarkCtrl.GetBookmark)
 		api.GET("/health", bookmarkCtrl.HealthCheck)

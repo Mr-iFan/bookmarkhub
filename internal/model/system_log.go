@@ -2,21 +2,18 @@ package model
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 // SystemLog 系统日志模型
 type SystemLog struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	// 日志字段
-	Type    string `gorm:"not null;index" json:"type"`    // sync/health/favicon
-	Message string `gorm:"type:text" json:"message"`     // 日志消息
-	Level   string `gorm:"not null;index" json:"level"`   // info/error/warn
+	Type    string `gorm:"not null;index" json:"type"`  // sync/health/favicon
+	Message string `gorm:"type:text" json:"message"`    // 日志消息
+	Level   string `gorm:"not null;index" json:"level"` // info/error/warn
 }
 
 // TableName 指定表名
@@ -37,4 +34,3 @@ const (
 	LogLevelWarn  = "warn"
 	LogLevelError = "error"
 )
-
