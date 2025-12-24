@@ -58,6 +58,14 @@ func SyncConfigToDB(db *gorm.DB, cfg *config.Config) error {
 				}
 			} else if err != nil {
 				return nil, fmt.Errorf("failed to query group node %s: %w", group.Name, err)
+			} else {
+				// 如果数据已存在，则更新相关属性
+				if err := tx.Model(&groupNode).Updates(map[string]interface{}{
+					"idx": group.Idx,
+					// 如果有其他需要同步的 group 属性可以在这里添加，比如 Icon
+				}).Error; err != nil {
+					return nil, fmt.Errorf("failed to update group node %s: %w", group.Name, err)
+				}
 			}
 
 			groupID := &groupNode.ID
