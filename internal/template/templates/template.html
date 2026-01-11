@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 0 0 0;
+            border-bottom: 1px dashed #ddd;
+            border-top: 1px dashed #ddd;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        nav {
+            display: flex;
+            width: 100%;
+        }
+        nav a {
+            text-decoration: none;
+            color: #333;
+            border: 1px dashed #ddd;
+            border-bottom: none;
+            border-top: none;
+            padding: 6px 12px;
+            margin-left: -1px;
+        }
+        nav a.active {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        .search-input {
+            border: 1px dashed #ddd;
+            border-bottom: none;
+            border-top: none;
+            padding: 0 50px;
+            margin-left: auto;
+            outline: none;
+            font-size: 14px;
+            color: #333;
+        }
+        .search-input::placeholder {
+            color: #999;
+        }
+        .main-container {
+            display: flex;
+            flex: 1;
+        }
+        .sidebar {
+            width: 220px;
+            flex-shrink: 0;
+            border-right: 1px dashed #ddd;
+            padding: 20px 15px 20px 0;
+        }
+        .sidebar-title {
+            font-size: 14px;
+            color: #999;
+            margin-bottom: 15px;
+            padding-left: 10px;
+        }
+        .tree-item {
+            list-style: none;
+        }
+        .tree-item > li {
+            margin-bottom: 0;
+        }
+        .tree-toggle {
+            display: flex;
+            align-items: center;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+            border: 1px dashed #ddd;
+            border-bottom: none;
+        }
+        .tree-toggle:hover {
+            background: #f5f5f5;
+        }
+        .tree-toggle .arrow {
+            margin-right: 8px;
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+        .tree-toggle.open .arrow {
+            transform: rotate(90deg);
+        }
+        .tree-children {
+            display: none;
+        }
+        .tree-children.open {
+            display: block;
+        }
+        .tree-children li {
+            list-style: none;
+        }
+        .tree-link {
+            display: block;
+            padding: 5px 10px 5px 30px;
+            font-size: 13px;
+            color: #666;
+            text-decoration: none;
+            border: 1px dashed #ddd;
+            border-bottom: none;
+        }
+        .tree-item > li:last-child .tree-toggle,
+        .tree-item > li:last-child .tree-children > li:last-child .tree-link {
+            border-bottom: 1px dashed #ddd;
+        }
+        .tree-link:hover {
+            background: #f5f5f5;
+            color: #333;
+        }
+        .tree-link.active {
+            background: #e8f4fc;
+            color: #007bff;
+            font-weight: bold;
+            border-left: 3px solid #007bff;
+            padding-left: 27px;
+        }
+        .tree-link.active:hover {
+            background: #d4ebf9;
+        }
+        .content {
+            flex: 1;
+            padding-left: 30px;
+        }
+        .category-title {
+            text-align: center;
+            color: #999;
+            margin: 0 0 20px;
+            font-size: 18px;
+            padding-top: 20px;
+        }
+        .category-title-secondary {
+            font-size: 16px;
+            color: #aaa;
+        }
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        .nav-card {
+            border: 1px dashed #ddd;
+            padding: 20px;
+            border-radius: 4px;
+            text-decoration: none;
+            color: inherit;
+            transition: box-shadow 0.2s, transform 0.2s;
+        }
+        .nav-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .nav-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .nav-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            border-radius: 4px;
+        }
+        .nav-title {
+            font-size: 18px;
+        }
+        .nav-desc {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+        .nav-url {
+            font-size: 12px;
+            color: #999;
+        }
+        footer {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px dashed #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #666;
+        }
+        .footer-links a {
+            margin-left: 15px;
+            text-decoration: none;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            {{range .AllGroups}}
+            <a href="{{.Name}}.html"{{if eq .Name $.ActiveGroup.Name}} class="active"{{end}}>{{.Name}}</a>
+            {{end}}
+            <input type="text" class="search-input" placeholder="搜索网站...">
+        </nav>
+    </header>
+    
+    <div class="main-container">
+        <aside class="sidebar">
+            {{if and .ActiveGroup .ActiveGroup.Groups}}
+            <ul class="tree-item">
+                {{range $idx, $group := .ActiveGroup.Groups}}
+                <li>
+                    {{if $group.Groups}}
+                    <!-- 一级导航有嵌套groups时，显示可展开的tree-toggle和二级导航 -->
+                    <div class="tree-toggle{{if eq $idx 0}} open{{end}}" onclick="toggleTree(this)">
+                        <span class="arrow">▶</span>{{$group.Name}}
+                    </div>
+                    <ul class="tree-children{{if eq $idx 0}} open{{end}}">
+                        {{range $group.Groups}}
+                        <li><a href="#{{sanitizeID .Name}}" class="tree-link">{{.Name}}</a></li>
+                        {{end}}
+                    </ul>
+                    {{else}}
+                    <!-- 一级导航只有items没有嵌套groups时，直接显示为链接，不显示二级导航 -->
+                    <a href="#{{sanitizeID $group.Name}}" class="tree-link" style="padding-left: 10px;">{{$group.Name}}</a>
+                    {{end}}
+                </li>
+                {{end}}
+            </ul>
+            {{end}}
+        </aside>
+
+        <div class="content">
+            {{if .ActiveGroup}}
+            <!-- 模块标题 -->
+            <div class="category-title">{{.ActiveGroup.Name}}</div>
+
+            <!-- 模块直属书签 -->
+            {{if .ActiveGroup.Items}}
+            <section id="{{sanitizeID .ActiveGroup.Name}}" class="nav-grid">
+                {{range .ActiveGroup.Items}}
+                <a class="nav-card" href="{{.URL}}" target="_blank">
+                    <div class="nav-header">
+                        {{if .Icon}}<img class="nav-icon" src="{{.Icon}}" alt="{{.Name}}">{{end}}
+                        <div class="nav-title">{{.Name}}</div>
+                    </div>
+                    <div class="nav-url">🔗 {{.URL}}</div>
+                </a>
+                {{end}}
+            </section>
+            {{end}}
+
+            <!-- 一级分组书签 -->
+            {{range .ActiveGroup.Groups}}
+            <section id="{{sanitizeID .Name}}">
+                <div class="category-title">{{.Name}}</div>
+                {{if .Items}}
+                <div class="nav-grid">
+                    {{range .Items}}
+                    <a class="nav-card" href="{{.URL}}" target="_blank">
+                        <div class="nav-header">
+                            {{if .Icon}}<img class="nav-icon" src="{{.Icon}}" alt="{{.Name}}">{{end}}
+                            <div class="nav-title">{{.Name}}</div>
+                        </div>
+                        <div class="nav-url">🔗 {{.URL}}</div>
+                    </a>
+                    {{end}}
+                </div>
+                {{end}}
+
+                <!-- 二级分组书签 -->
+                {{range .Groups}}
+                <section id="{{sanitizeID .Name}}">
+                    <div class="category-title category-title-secondary">{{.Name}}</div>
+                    {{if .Items}}
+                    <div class="nav-grid">
+                        {{range .Items}}
+                        <a class="nav-card" href="{{.URL}}" target="_blank">
+                            <div class="nav-header">
+                                {{if .Icon}}<img class="nav-icon" src="{{.Icon}}" alt="{{.Name}}">{{end}}
+                                <div class="nav-title">{{.Name}}</div>
+                            </div>
+                            <div class="nav-url">🔗 {{.URL}}</div>
+                        </a>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </section>
+                {{end}}
+            </section>
+            {{end}}
+            {{end}}
+        </div>
+    </div>
+
+    <footer>
+        <div class="copyright">© 2026 网站导航</div>
+        <div class="footer-links">
+            <a href="#">关于</a>
+            <a href="#">反馈</a>
+        </div>
+    </footer>
+
+    <script>
+        function toggleTree(element) {
+            element.classList.toggle('open');
+            const children = element.nextElementSibling;
+            if (children) {
+                children.classList.toggle('open');
+            }
+        }
+
+        // 平滑滚动到锚点
+        document.querySelectorAll('.tree-link[href^="#"]').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href').substring(1);
+                const target = document.getElementById(targetId);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // 滚动时高亮当前可见区域对应的导航
+        const sections = document.querySelectorAll('section[id^="section-"]');
+        if (sections.length > 0) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const id = entry.target.id;
+                        document.querySelectorAll('.tree-link').forEach(link => {
+                            link.classList.remove('active');
+                            if (link.getAttribute('href') === '#' + id) {
+                                link.classList.add('active');
+                            }
+                        });
+                    }
+                });
+            }, { threshold: 0.3, rootMargin: '-10% 0px -70% 0px' });
+
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+        }
+    </script>
+</body>
+</html>

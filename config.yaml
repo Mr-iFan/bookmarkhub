@@ -48,6 +48,11 @@ bookmark:
             url: "https://pkg.go.dev"
           - name: "Go 文档"
             url: "https://pkg.go.dev/std"
+        groups:
+          - name: 三方资源
+            items:
+              - name: 三方
+                url: "https://www.baidu.com"
 
   # 示例组4：使用 include 引入外部配置文件
   - name: "外部配置"
