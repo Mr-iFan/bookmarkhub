@@ -9,20 +9,21 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"bookmark-nav-generator/internal/config"
+	"bookmark-nav-generator/internal/manager"
 	"bookmark-nav-generator/internal/template"
 )
 
 // Server represents the web server for serving bookmark navigation pages.
 type Server struct {
-	config *config.Config
-	engine *template.Engine
-	router *gin.Engine
-	port   int
+	configManager *manager.ConfigManager
+	engine        *template.Engine
+	router        *gin.Engine
+	port          int
 }
 
-// NewServer creates a new Server with the given configuration and port.
+// NewServer creates a new Server with ConfigManager for hot reload support.
 // If port is 0, the default port 8080 will be used (Requirement 3.3).
-func NewServer(cfg *config.Config, port int) (*Server, error) {
+func NewServer(configManager *manager.ConfigManager, port int) (*Server, error) {
 	if port == 0 {
 		port = 8080
 	}
@@ -38,10 +39,10 @@ func NewServer(cfg *config.Config, port int) (*Server, error) {
 	router := gin.Default()
 
 	s := &Server{
-		config: cfg,
-		engine: tmplEngine,
-		router: router,
-		port:   port,
+		configManager: configManager,
+		engine:        tmplEngine,
+		router:        router,
+		port:          port,
 	}
 
 	s.setupRoutes()
@@ -70,17 +71,19 @@ func (s *Server) setupRoutes() {
 
 // handleIndex handles the root path request, displaying all groups.
 func (s *Server) handleIndex(c *gin.Context) {
+	cfg := s.configManager.GetConfig()
+
 	// If there are bookmark groups, show the first one as active
 	var activeGroup *config.BookmarkGroup
-	if len(s.config.Bookmark) > 0 {
-		activeGroup = &s.config.Bookmark[0]
+	if len(cfg.Bookmark) > 0 {
+		activeGroup = &cfg.Bookmark[0]
 	}
 
 	data := &template.TemplateData{
 		Title:       "书签导航",
-		Groups:      s.config.Bookmark,
+		Groups:      cfg.Bookmark,
 		ActiveGroup: activeGroup,
-		AllGroups:   s.config.Bookmark,
+		AllGroups:   cfg.Bookmark,
 	}
 
 	s.renderTemplate(c, data)
@@ -103,11 +106,13 @@ func (s *Server) handleGroupHTML(c *gin.Context) {
 
 // renderGroup renders a specific bookmark group page.
 func (s *Server) renderGroup(c *gin.Context, groupName string) {
+	cfg := s.configManager.GetConfig()
+
 	// Find the requested group
 	var activeGroup *config.BookmarkGroup
-	for i := range s.config.Bookmark {
-		if s.config.Bookmark[i].Name == groupName {
-			activeGroup = &s.config.Bookmark[i]
+	for i := range cfg.Bookmark {
+		if cfg.Bookmark[i].Name == groupName {
+			activeGroup = &cfg.Bookmark[i]
 			break
 		}
 	}
@@ -119,9 +124,9 @@ func (s *Server) renderGroup(c *gin.Context, groupName string) {
 
 	data := &template.TemplateData{
 		Title:       activeGroup.Name,
-		Groups:      s.config.Bookmark,
+		Groups:      cfg.Bookmark,
 		ActiveGroup: activeGroup,
-		AllGroups:   s.config.Bookmark,
+		AllGroups:   cfg.Bookmark,
 	}
 
 	s.renderTemplate(c, data)
@@ -144,4 +149,16 @@ func (s *Server) GetPort() int {
 // GetRouter returns the underlying Gin router for testing purposes.
 func (s *Server) GetRouter() *gin.Engine {
 	return s.router
+}
+
+// StartWatching begins file system monitoring for configuration changes.
+// This enables hot reload functionality (Requirement 1.1, 1.4).
+func (s *Server) StartWatching() error {
+	return s.configManager.StartWatching()
+}
+
+// StopWatching stops file system monitoring.
+// Should be called during graceful shutdown (Requirement 1.4).
+func (s *Server) StopWatching() error {
+	return s.configManager.StopWatching()
 }

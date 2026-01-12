@@ -2,13 +2,20 @@
 package cmd
 
 import (
-	"bookmark-nav-generator/internal/config"
-	"bookmark-nav-generator/internal/generator"
-	"bookmark-nav-generator/internal/server"
+	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
+
+	"bookmark-nav-generator/internal/config"
+	"bookmark-nav-generator/internal/generator"
+	"bookmark-nav-generator/internal/manager"
+	"bookmark-nav-generator/internal/server"
 )
 
 const (
@@ -94,18 +101,78 @@ func loadConfigOrGenerateTemplate() (*config.Config, error) {
 }
 
 // runServe starts the web server (Requirement 3.1, 4.1, 4.3).
+// Supports hot reload via ConfigManager (Requirement 1.1).
 func runServe(cmd *cobra.Command, args []string) error {
 	cfg, err := loadConfigOrGenerateTemplate()
 	if err != nil {
 		return err
 	}
 
-	srv, err := server.NewServer(cfg, port)
+	// Create ConfigManager for hot reload support (Requirement 1.1)
+	configManager, err := manager.NewConfigManager(configFile, cfg)
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+
+	srv, err := server.NewServer(configManager, port)
 	if err != nil {
 		return fmt.Errorf("创建服务器失败: %w", err)
 	}
 
-	return srv.Run()
+	// Start configuration file watching (Requirement 1.1)
+	if err := srv.StartWatching(); err != nil {
+		return fmt.Errorf("启动配置监听失败: %w", err)
+	}
+
+	// Set up graceful shutdown (Requirement 1.4)
+	return runServerWithGracefulShutdown(srv)
+}
+
+// runServerWithGracefulShutdown runs the server and handles graceful shutdown.
+// Stops ConfigWatcher when the program exits (Requirement 1.4).
+func runServerWithGracefulShutdown(srv *server.Server) error {
+	// Create a channel to listen for OS signals
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Create HTTP server for graceful shutdown support
+	httpServer := &http.Server{
+		Addr:    fmt.Sprintf(":%d", srv.GetPort()),
+		Handler: srv.GetRouter(),
+	}
+
+	// Start server in a goroutine
+	serverErr := make(chan error, 1)
+	go func() {
+		fmt.Printf("Starting server on http://localhost:%d\n", srv.GetPort())
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+	}()
+
+	// Wait for interrupt signal or server error
+	select {
+	case <-quit:
+		fmt.Println("\nShutting down server...")
+	case err := <-serverErr:
+		return fmt.Errorf("服务器错误: %w", err)
+	}
+
+	// Stop configuration watching (Requirement 1.4)
+	if err := srv.StopWatching(); err != nil {
+		fmt.Printf("停止配置监听时出错: %v\n", err)
+	}
+
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		return fmt.Errorf("服务器关闭失败: %w", err)
+	}
+
+	fmt.Println("Server stopped gracefully")
+	return nil
 }
 
 // runGenerate generates HTML files (Requirement 2.1, 4.2).
