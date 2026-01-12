@@ -33,7 +33,7 @@ var (
 // rootCmd represents the base command when called without any subcommands.
 // Default behavior is to start the web server (Requirement 4.1).
 var rootCmd = &cobra.Command{
-	Use:   "bookmark-nav-generator",
+	Use:   "bookmarkhub",
 	Short: "书签导航网站生成器",
 	Long: `书签导航网站生成器是一个基于 Go 语言的工具，
 能够解析 YAML 配置文件中的书签数据，使用 HTML 模板生成静态导航页面，
