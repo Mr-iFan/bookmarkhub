@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"bookmark-nav-generator/internal/config"
+	"bookmarkhub/internal/config"
 )
 
 //go:embed templates/template.html

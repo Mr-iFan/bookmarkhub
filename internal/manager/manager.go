@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"bookmark-nav-generator/internal/config"
-	"bookmark-nav-generator/internal/watcher"
+	"bookmarkhub/internal/config"
+	"bookmarkhub/internal/watcher"
 )
 
 // ConfigManager manages configuration lifecycle with thread-safe access.

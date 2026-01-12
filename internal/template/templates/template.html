@@ -197,6 +197,11 @@
             font-size: 12px;
             color: #999;
         }
+        .nav-site {
+            font-size: 12px;
+            color: #007bff;
+            margin-bottom: 4px;
+        }
         footer {
             margin-top: auto;
             padding-top: 20px;
@@ -211,6 +216,16 @@
             margin-left: 15px;
             text-decoration: none;
             color: #007bff;
+        }
+        .no-results {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+            font-size: 16px;
+        }
+        .search-results-container {
+            padding-top: 0;
         }
     </style>
 </head>
@@ -251,6 +266,14 @@
         </aside>
 
         <div class="content">
+            <!-- 搜索结果容器 -->
+            <div id="search-results" class="search-results-container" style="display: none;">
+                <div class="category-title">搜索结果</div>
+                <div id="search-results-grid" class="nav-grid"></div>
+            </div>
+
+            <!-- 原始内容区域 -->
+            <div id="original-content">
             {{if .ActiveGroup}}
             <!-- 模块标题 -->
             <div class="category-title">{{.ActiveGroup.Name}}</div>
@@ -310,6 +333,7 @@
             </section>
             {{end}}
             {{end}}
+            </div>
         </div>
     </div>
 
@@ -322,6 +346,31 @@
     </footer>
 
     <script>
+        // 嵌入全局书签数据 - 遍历所有网站（AllGroups）的分组和子分组，收集所有书签到扁平数组
+        const allBookmarkData = [
+            {{- range .AllGroups}}
+            {{- $siteName := .Name}}
+            {{- /* 网站直属书签 */}}
+            {{- range .Items}}
+            {name: "{{.Name}}", url: "{{.URL}}", icon: "{{.Icon}}", group: "{{$siteName}}", site: "{{$siteName}}"},
+            {{- end}}
+            {{- /* 一级分组书签 */}}
+            {{- range .Groups}}
+            {{- $groupName := .Name}}
+            {{- range .Items}}
+            {name: "{{.Name}}", url: "{{.URL}}", icon: "{{.Icon}}", group: "{{$groupName}}", site: "{{$siteName}}"},
+            {{- end}}
+            {{- /* 二级分组书签 */}}
+            {{- range .Groups}}
+            {{- $subGroupName := .Name}}
+            {{- range .Items}}
+            {name: "{{.Name}}", url: "{{.URL}}", icon: "{{.Icon}}", group: "{{$subGroupName}}", site: "{{$siteName}}"},
+            {{- end}}
+            {{- end}}
+            {{- end}}
+            {{- end}}
+        ];
+
         function toggleTree(element) {
             element.classList.toggle('open');
             const children = element.nextElementSibling;
@@ -342,6 +391,86 @@
             });
         });
 
+        /**
+         * 检查单个书签是否匹配搜索词
+         * @param {Object} bookmark - 书签对象
+         * @param {string} query - 搜索关键词（已转小写）
+         * @returns {boolean} - 是否匹配
+         */
+        function matchesQuery(bookmark, query) {
+            const lowerQuery = query.toLowerCase();
+            const nameMatch = bookmark.name.toLowerCase().includes(lowerQuery);
+            const urlMatch = bookmark.url.toLowerCase().includes(lowerQuery);
+            return nameMatch || urlMatch;
+        }
+
+        /**
+         * 执行模糊搜索
+         * @param {string} query - 搜索关键词
+         * @param {Array} bookmarks - 书签数据数组
+         * @returns {Array} - 匹配的书签数组
+         */
+        function searchBookmarks(query, bookmarks) {
+            // 空搜索词返回空数组
+            if (!query || query.trim() === '') {
+                return [];
+            }
+            // 过滤返回所有匹配的书签
+            return bookmarks.filter(bookmark => matchesQuery(bookmark, query));
+        }
+
+        /**
+         * 渲染搜索结果
+         * @param {Array} results - 匹配的书签数组
+         */
+        function renderSearchResults(results) {
+            const searchResultsContainer = document.getElementById('search-results');
+            const searchResultsGrid = document.getElementById('search-results-grid');
+            const originalContent = document.getElementById('original-content');
+
+            // 隐藏原始内容，显示搜索结果容器
+            originalContent.style.display = 'none';
+            searchResultsContainer.style.display = 'block';
+
+            // 无结果时显示提示信息
+            if (!results || results.length === 0) {
+                searchResultsGrid.innerHTML = '<div class="no-results">未找到匹配的书签</div>';
+                return;
+            }
+
+            // 生成书签卡片的HTML，包含网站来源信息
+            const html = results.map(bookmark => {
+                const iconHtml = bookmark.icon 
+                    ? `<img class="nav-icon" src="${bookmark.icon}" alt="${bookmark.name}">` 
+                    : '';
+                return `
+                    <a class="nav-card" href="${bookmark.url}" target="_blank">
+                        <div class="nav-header">
+                            ${iconHtml}
+                            <div class="nav-title">${bookmark.name}</div>
+                        </div>
+                        <div class="nav-site">📁 ${bookmark.site}</div>
+                        <div class="nav-url">🔗 ${bookmark.url}</div>
+                    </a>
+                `;
+            }).join('');
+
+            searchResultsGrid.innerHTML = html;
+        }
+
+        /**
+         * 恢复原始页面布局
+         */
+        function restoreOriginalLayout() {
+            const searchResultsContainer = document.getElementById('search-results');
+            const originalContent = document.getElementById('original-content');
+
+            // 隐藏搜索结果容器
+            searchResultsContainer.style.display = 'none';
+            // 显示原始内容区域
+            originalContent.style.display = 'block';
+        }
+
         // 滚动时高亮当前可见区域对应的导航
         const sections = document.querySelectorAll('section[id^="section-"]');
         if (sections.length > 0) {
@@ -361,6 +490,45 @@
 
             sections.forEach(section => {
                 observer.observe(section);
+            });
+        }
+
+        /**
+         * 防抖函数
+         * @param {Function} func - 要执行的函数
+         * @param {number} delay - 延迟时间（毫秒）
+         * @returns {Function} - 防抖后的函数
+         */
+        function debounce(func, delay) {
+            let timeoutId;
+            return function(...args) {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+
+        /**
+         * 处理搜索输入
+         * @param {string} query - 搜索关键词
+         */
+        function handleSearchInput(query) {
+            const trimmedQuery = query.trim();
+            if (trimmedQuery === '') {
+                // 清空搜索时恢复原始布局
+                restoreOriginalLayout();
+            } else {
+                // 执行搜索并渲染结果（使用全局书签数据进行跨网站搜索）
+                const results = searchBookmarks(trimmedQuery, allBookmarkData);
+                renderSearchResults(results);
+            }
+        }
+
+        // 搜索输入事件监听（带300ms防抖）
+        const searchInput = document.querySelector('.search-input');
+        if (searchInput) {
+            const debouncedSearch = debounce(handleSearchInput, 300);
+            searchInput.addEventListener('input', function(e) {
+                debouncedSearch(e.target.value);
             });
         }
     </script>

@@ -8,9 +8,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"bookmark-nav-generator/internal/config"
-	"bookmark-nav-generator/internal/manager"
-	"bookmark-nav-generator/internal/template"
+	"bookmarkhub/internal/config"
+	"bookmarkhub/internal/manager"
+	"bookmarkhub/internal/template"
 )
 
 // Server represents the web server for serving bookmark navigation pages.

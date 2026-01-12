@@ -12,10 +12,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"bookmark-nav-generator/internal/config"
-	"bookmark-nav-generator/internal/generator"
-	"bookmark-nav-generator/internal/manager"
-	"bookmark-nav-generator/internal/server"
+	"bookmarkhub/internal/config"
+	"bookmarkhub/internal/generator"
+	"bookmarkhub/internal/manager"
+	"bookmarkhub/internal/server"
 )
 
 const (

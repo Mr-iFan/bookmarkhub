@@ -1,4 +1,4 @@
-module bookmark-nav-generator
+module bookmarkhub
 
 go 1.24.5
 

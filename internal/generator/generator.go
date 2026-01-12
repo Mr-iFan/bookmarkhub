@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"bookmark-nav-generator/internal/config"
-	"bookmark-nav-generator/internal/template"
+	"bookmarkhub/internal/config"
+	"bookmarkhub/internal/template"
 )
 
 // Generator coordinates configuration parsing and HTML file generation.
