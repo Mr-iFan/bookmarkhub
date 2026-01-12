@@ -15,7 +15,7 @@ RUN go mod download
 COPY . .
 
 # 编译静态链接的可执行文件
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o bookmark-nav-generator .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o bookmarkhub .
 
 # 多阶段构建 - 运行阶段（最小化镜像）
 FROM alpine:latest
@@ -30,7 +30,7 @@ RUN adduser -D -g '' appuser
 WORKDIR /app
 
 # 从构建阶段复制可执行文件
-COPY --from=builder /build/bookmark-nav-generator .
+COPY --from=builder /build/bookmarkhub .
 
 # 切换到非 root 用户
 USER appuser
@@ -39,5 +39,5 @@ USER appuser
 EXPOSE 8080
 
 # 默认启动 Web 服务
-ENTRYPOINT ["./bookmark-nav-generator"]
+ENTRYPOINT ["./bookmarkhub"]
 CMD ["serve", "--port", "8080"]

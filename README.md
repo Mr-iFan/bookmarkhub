@@ -18,21 +18,21 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/bookmark-nav-generator.git
-cd bookmark-nav-generator
+git clone https://github.com/your-username/bookmarkhub.git
+cd bookmarkhub
 
 # 编译
-go build -o bookmark-nav-generator .
+go build -o bookmarkhub .
 ```
 
 ### 使用 Docker
 
 ```bash
 # 构建镜像
-docker build -t bookmark-nav-generator .
+docker build -t bookmarkhub .
 
 # 运行容器
-docker run -p 8080:8080 -v $(pwd)/config.yaml:/app/config.yaml bookmark-nav-generator
+docker run --name bookmarkhub -p 8080:8080 -v $(pwd)/config.yaml:/app/config.yaml bookmarkhub
 ```
 
 ## 使用方法
@@ -42,7 +42,7 @@ docker run -p 8080:8080 -v $(pwd)/config.yaml:/app/config.yaml bookmark-nav-gene
 1. 首次运行程序会自动生成配置模板：
 
 ```bash
-./bookmark-nav-generator
+./bookmarkhub
 # 输出: 配置文件 config.yaml 不存在。
 #       已生成配置模板文件 config.template.yaml，请根据需要修改后重命名为 config.yaml。
 ```
@@ -56,9 +56,9 @@ mv config.template.yaml config.yaml
 3. 启动 Web 服务预览：
 
 ```bash
-./bookmark-nav-generator
+./bookmarkhub
 # 或
-./bookmark-nav-generator serve
+./bookmarkhub serve
 ```
 
 4. 访问 http://localhost:8080 查看导航页面
@@ -67,17 +67,17 @@ mv config.template.yaml config.yaml
 
 ```bash
 # 默认启动 Web 服务（端口 8080）
-./bookmark-nav-generator
+./bookmarkhub
 
 # 指定端口启动 Web 服务
-./bookmark-nav-generator serve --port 3000
-./bookmark-nav-generator --port 3000
+./bookmarkhub serve --port 3000
+./bookmarkhub --port 3000
 
 # 生成静态 HTML 文件到默认目录 ./output
-./bookmark-nav-generator generate
+./bookmarkhub generate
 
 # 生成静态 HTML 文件到指定目录
-./bookmark-nav-generator generate --output ./dist
+./bookmarkhub generate --output ./dist
 ```
 
 ### 命令说明
@@ -172,7 +172,7 @@ bookmark:
 ## 项目结构
 
 ```
-bookmark-nav-generator/
+bookmarkhub/
 ├── main.go                 # 程序入口
 ├── cmd/
 │   └── root.go            # 命令行定义
