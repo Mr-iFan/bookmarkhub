@@ -21,14 +21,14 @@ export default function SidebarTree({
   };
 
   return (
-    <div className="space-y-3">
+    <div>
       {categories.map((root) => {
         const isOpen = openState[root.id] ?? true;
 
         return (
           <div
             key={root.id}
-            className="border border-dashed border-[#b7bcc2] bg-[#fdfbf5]"
+            className="border-x border-t border-dashed border-[#b7bcc2] bg-[#fdfbf5] last:border-b"
           >
             <button
               type="button"
@@ -44,7 +44,7 @@ export default function SidebarTree({
             </button>
 
             {isOpen && (
-              <div className="space-y-1 px-3 py-2">
+              <div className="px-3 py-2">
                 {root.children?.map((child) => {
                   const isActive = selectedCategoryId === child.id;
                   return (
@@ -52,7 +52,7 @@ export default function SidebarTree({
                       key={child.id}
                       type="button"
                       onClick={() => onSelect(child.id)}
-                      className={`flex w-full items-center justify-between border border-dashed px-3 py-2 text-left text-sm transition-colors ${
+                      className={`flex w-full items-center justify-between border-x border-t border-dashed px-3 py-2 text-left text-sm transition-colors last:border-b ${
                         isActive
                           ? "border-[#8d939b] bg-white text-slate-900"
                           : "border-[#b7bcc2] bg-[#fdfbf5] text-slate-700 hover:bg-white"

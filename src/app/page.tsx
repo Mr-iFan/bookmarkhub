@@ -74,17 +74,14 @@ export default function Home() {
         </section>
 
         <div className="grid gap-6 lg:grid-cols-12">
-          <aside className="lg:col-span-4 xl:col-span-3">
-            <div className="border border-dashed border-[#b7bcc2] bg-white/90 p-4">
-              <SidebarTree
-                categories={categoryTree}
-                selectedCategoryId={selectedCategory}
-                onSelect={(id) => setSelectedCategory(id)}
-              />
-            </div>
-          </aside>
-
-          <main className="lg:col-span-8 xl:col-span-9">
+          <div className="h-screen lg:col-span-2 xl:col-span-2">
+            <SidebarTree
+              categories={categoryTree}
+              selectedCategoryId={selectedCategory}
+              onSelect={(id) => setSelectedCategory(id)}
+            />
+          </div>
+          <main className="lg:col-span-10 xl:col-span-10">
             <div className="flex h-full flex-col gap-4 border border-dashed border-[#b7bcc2] bg-white/90 p-5">
               {filteredBookmarks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-6 py-10 text-center text-slate-600">
@@ -92,7 +89,7 @@ export default function Home() {
                   <p className="text-sm">尝试切换模块或分类看看</p>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   {filteredBookmarks.map((bookmark) => {
                     const categoryName = flatCategories.find(
                       (c) => c.id === bookmark.categoryId,
