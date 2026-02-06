@@ -176,7 +176,7 @@ export default function Home() {
         </section>
 
         <div className="grid flex-1 auto-rows-fr items-stretch gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-2 xl:col-span-2 flex h-full flex-col overflow-hidden">
+          <div className="lg:col-span-2 xl:col-span-2 flex h-wrap flex-col overflow-hidden ml-2 mb-4">
             <SidebarTree
               categories={categoryTree}
               selectedCategoryId={selectedCategory}
@@ -184,10 +184,10 @@ export default function Home() {
             />
 
           </div>
-          <main className="lg:col-span-10 xl:col-span-10 flex h-full flex-col overflow-hidden border border-dashed border-[#b7bcc2] bg-white/90">
+          <main className="col-span-10 flex h-wrap flex-col overflow-hidden border border-dashed border-[#b7bcc2] bg-white/90 mr-2 mb-4">
             <div
               ref={contentRef}
-              className="flex h-full flex-col gap-4 overflow-y-auto bg-white/90 p-5"
+              className="flex h-full flex-col gap-4 overflow-y-auto bg-white/90 p-3"
             >
               {filteredBookmarks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-6 py-10 text-center text-slate-600">
