@@ -60,42 +60,41 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#fdfbf5] text-slate-900">
-      <Link
-        href="/settings"
-        className="fixed right-6 top-6 z-20 flex items-center gap-2 border border-dashed border-[#b7bcc2] bg-white px-3 py-1 text-sm text-slate-700 shadow-sm hover:bg-[#fdfbf5]"
-      >
-        <span>设置</span>
-      </Link>
       <div className="flex w-full max-w-none flex-col gap-6">
         <section className="border border-dashed border-[#b7bcc2] bg-white/80 p-0">
-          <div className="flex flex-wrap items-center gap-0 pr-28">
-            {config?.modules.map((module, index) => {
-              const isActive = selectedModule === module.id;
-              const isFirst = index === 0;
-              const isLast = index === (config?.modules.length ?? 0) - 1;
+          <div className="flex flex-wrap items-center justify-between">
+            <div className="flex flex-wrap items-center gap-0">
+              {config?.modules.map((module, index) => {
+                const isActive = selectedModule === module.id;
+                const isLast = index === (config?.modules.length ?? 0) - 1;
 
-              return (
-                <button
-                  key={module.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedModule(module.id);
-                    setSelectedCategory(null);
-                  }}
-                  className={`border-l border-dashed border-[#b7bcc2] px-4 py-2 text-sm text-left transition-colors ${
-                    isLast ? "border-r" : "border-r-0"
-                  } ${
-                    isActive
-                      ? "bg-[#fdfbf5] text-slate-900"
-                      : "bg-white text-slate-700 hover:bg-[#fdfbf5]"
-                  } ${
-                    isFirst ? "ml-4" : ""
-                  }`}
-                >
-                  <div className="font-semibold">{module.name}</div>
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={module.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedModule(module.id);
+                      setSelectedCategory(null);
+                    }}
+                    className={`border-l border-dashed border-[#b7bcc2] px-4 py-2 text-sm text-left transition-colors ${
+                      isLast ? "border-r" : "border-r-0"
+                    } ${
+                      isActive
+                        ? "bg-[#fdfbf5] text-slate-900"
+                        : "bg-white text-slate-700 hover:bg-[#fdfbf5]"
+                    }`}
+                  >
+                    <div className="font-semibold">{module.name}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <Link
+              href="/settings"
+              className="flex items-center gap-2 border border-dashed border-[#b7bcc2] bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-[#fdfbf5] shrink-0"
+            >
+              <span>设置</span>
+            </Link>
           </div>
         </section>
 

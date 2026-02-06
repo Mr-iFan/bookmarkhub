@@ -1,58 +1,65 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { addConfigIfChanged, defaultConfigYaml, deleteConfigByVersion, loadActiveConfig, loadStoredConfigs, parseYamlToConfig, resolveActiveFromList } from "@/lib/config";
+import { NoticeBar, useNotice } from "@/lib/notice";
 
 export default function SettingsPage() {
   const [yamlInput, setYamlInput] = useState<string>(defaultConfigYaml);
   const [configs, setConfigs] = useState(() => loadStoredConfigs());
-  const { activeYaml, activeVersion } = useMemo(() => resolveActiveFromList(configs), [configs]);
+  const { activeVersion } = useMemo(() => resolveActiveFromList(configs), [configs]);
+  const { notice, showInfo, showWarn, showError } = useNotice();
+  const router = useRouter();
 
   useEffect(() => {
     const { activeYaml: latestYaml } = loadActiveConfig();
     setYamlInput(latestYaml);
+    setConfigs(loadStoredConfigs());
   }, []);
 
   const handleAdd = () => {
     const parsed = parseYamlToConfig(yamlInput);
     if (!parsed) {
-      alert("YAML 解析失败，请检查格式");
+      showError("YAML 解析失败，请检查格式");
       return;
     }
     const result = addConfigIfChanged(yamlInput);
     if (result.added && result.newVersion) {
       setConfigs(result.stored);
-      alert(`已添加版本 ${result.newVersion}`);
+      showInfo(`已添加版本 ${result.newVersion}`);
     } else {
-      alert("内容与当前配置相同，无需添加");
+      showWarn("内容与当前配置相同，无需添加");
     }
   };
 
   const handleDelete = (version: string) => {
     const { activeVersion: nextActive } = deleteConfigByVersion(version);
     setConfigs(loadStoredConfigs());
-    alert(`已删除 ${version}，当前版本：${nextActive}`);
+    showInfo(`已删除 ${version}，当前版本：${nextActive}`);
   };
 
   const handleUseDefault = () => {
     setYamlInput(defaultConfigYaml);
     setConfigs([]);
     localStorage.removeItem("bookmarkhub-yaml-configs");
-    alert("已切换到默认配置");
+    showInfo("已切换到默认配置");
   };
 
   const handleApply = () => {
     const parsed = parseYamlToConfig(yamlInput);
     if (!parsed) {
-      alert("YAML 解析失败，请检查格式");
+      showError("YAML 解析失败，请检查格式");
       return;
     }
     const result = addConfigIfChanged(yamlInput);
     if (result.added) {
       setConfigs(result.stored);
-      alert(`已保存并生效：${result.newVersion}`);
+      showInfo(`已保存并生效：${result.newVersion}`);
+      router.push("/");
     } else {
-      alert("内容与当前配置相同，无需保存");
+      showWarn("内容与当前配置相同，无需保存");
     }
   };
 
@@ -63,6 +70,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-[#fdfbf5] text-slate-900">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8">
+        <NoticeBar notice={notice} />
         <header className="flex items-center justify-between border border-dashed border-[#b7bcc2] bg-white/80 px-4 py-3">
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Settings</p>
@@ -77,6 +85,12 @@ export default function SettingsPage() {
             >
               使用默认配置
             </button>
+            <Link
+              href="/"
+              className="border border-dashed border-[#b7bcc2] bg-white px-3 py-1 text-sm text-slate-700 hover:bg-[#fdfbf5]"
+            >
+              返回首页
+            </Link>
           </div>
         </header>
 
