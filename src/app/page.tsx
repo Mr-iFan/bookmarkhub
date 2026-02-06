@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import BookmarkCard from "@/components/BookmarkCard";
 import SidebarTree from "@/components/SidebarTree";
-import { loadActiveConfig } from "@/lib/config";
+import { createStorage, defaultConfig, loadStorageSettings } from "@/lib/config";
 import { AppConfig, Category } from "@/types";
 
 const buildCategoryTree = (categories: Category[], parentId?: string): Category[] => {
@@ -25,11 +25,31 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
-    const { activeConfig } = loadActiveConfig();
-    setConfig(activeConfig);
-    if (activeConfig.modules.length > 0) {
-      setSelectedModule(activeConfig.modules[0].id);
-    }
+    let cancelled = false;
+    const settings = loadStorageSettings();
+    const storage = createStorage(settings);
+
+    storage
+      .loadActiveConfig()
+      .then(({ activeConfig }) => {
+        if (cancelled) return;
+        setConfig(activeConfig);
+        if (activeConfig.modules.length > 0) {
+          setSelectedModule(activeConfig.modules[0].id);
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        if (cancelled) return;
+        setConfig(defaultConfig);
+        if (defaultConfig.modules.length > 0) {
+          setSelectedModule(defaultConfig.modules[0].id);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const categoryTree = useMemo(() => {
