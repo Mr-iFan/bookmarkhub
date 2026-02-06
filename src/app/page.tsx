@@ -60,21 +60,16 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#fdfbf5] text-slate-900">
+      <Link
+        href="/settings"
+        className="fixed right-6 top-6 z-20 flex items-center gap-2 border border-dashed border-[#b7bcc2] bg-white px-3 py-1 text-sm text-slate-700 shadow-sm hover:bg-[#fdfbf5]"
+      >
+        <span>设置</span>
+      </Link>
       <div className="flex w-full max-w-none flex-col gap-6">
         <section className="border border-dashed border-[#b7bcc2] bg-white/80 p-0">
-          <div className="flex flex-wrap items-center gap-0">
-            <div className="ml-4 mr-2 text-xs text-slate-500">配置版本</div>
-            <div className="mr-4 rounded-sm border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-2 py-1 text-xs text-slate-700">
-              {config ? "自定义" : "默认"}
-            </div>
-            <Link
-              href="/settings"
-              className="ml-auto mr-4 flex items-center gap-2 border border-dashed border-[#b7bcc2] bg-white px-3 py-1 text-sm text-slate-700 hover:bg-[#fdfbf5]"
-            >
-              <span>设置</span>
-            </Link>
+          <div className="flex flex-wrap items-center gap-0 pr-28">
             {config?.modules.map((module, index) => {
-
               const isActive = selectedModule === module.id;
               const isFirst = index === 0;
               const isLast = index === (config?.modules.length ?? 0) - 1;
@@ -87,7 +82,6 @@ export default function Home() {
                     setSelectedModule(module.id);
                     setSelectedCategory(null);
                   }}
-
                   className={`border-l border-dashed border-[#b7bcc2] px-4 py-2 text-sm text-left transition-colors ${
                     isLast ? "border-r" : "border-r-0"
                   } ${
