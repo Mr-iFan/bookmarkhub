@@ -12,6 +12,12 @@ export type Category = {
   children?: Category[];
 };
 
+export type AppConfig = {
+  modules: Module[];
+  categories: Category[];
+  bookmarks: Bookmark[];
+};
+
 export type Bookmark = {
   id: string;
   title: string;

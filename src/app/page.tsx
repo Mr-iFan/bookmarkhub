@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import BookmarkCard from "@/components/BookmarkCard";
 import SidebarTree from "@/components/SidebarTree";
-import { bookmarks, moduleCategories, modules } from "@/data/bookmarks";
-import { Category } from "@/types";
+import { loadActiveConfig } from "@/lib/config";
+import { AppConfig, Category } from "@/types";
 
 const flattenCategories = (categories: Category[]): Category[] => {
   return categories.reduce<Category[]>((acc, current) => {
@@ -17,12 +18,29 @@ const flattenCategories = (categories: Category[]): Category[] => {
 };
 
 export default function Home() {
-  const [selectedModule, setSelectedModule] = useState<string>(modules[0].id);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [selectedModule, setSelectedModule] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+  useEffect(() => {
+    const { activeConfig } = loadActiveConfig();
+    setConfig(activeConfig);
+    if (activeConfig.modules.length > 0) {
+      setSelectedModule(activeConfig.modules[0].id);
+    }
+  }, []);
+
   const categoryTree = useMemo(() => {
-    return moduleCategories[selectedModule] ?? [];
-  }, [selectedModule]);
+    if (!config) return [];
+    const roots = config.categories.filter((item) => item.moduleId === selectedModule && !item.parentId);
+    const childrenMap = config.categories.reduce<Record<string, Category[]>>((acc, item) => {
+      if (item.parentId) {
+        acc[item.parentId] = acc[item.parentId] ? [...acc[item.parentId], item] : [item];
+      }
+      return acc;
+    }, {});
+    return roots.map((root) => ({ ...root, children: childrenMap[root.id] ?? [] }));
+  }, [config, selectedModule]);
 
   const flatCategories = useMemo(
     () => flattenCategories(categoryTree),
@@ -30,24 +48,37 @@ export default function Home() {
   );
 
   const filteredBookmarks = useMemo(() => {
-    return bookmarks.filter((bookmark) => {
+    if (!config) return [];
+    return config.bookmarks.filter((bookmark) => {
       const matchModule = bookmark.moduleId === selectedModule;
       const matchCategory = selectedCategory
         ? bookmark.categoryId === selectedCategory
         : true;
       return matchModule && matchCategory;
     });
-  }, [selectedCategory, selectedModule]);
+  }, [config, selectedCategory, selectedModule]);
 
   return (
     <div className="min-h-screen bg-[#fdfbf5] text-slate-900">
       <div className="flex w-full max-w-none flex-col gap-6">
         <section className="border border-dashed border-[#b7bcc2] bg-white/80 p-0">
-          <div className="flex flex-wrap gap-0">
-            {modules.map((module, index) => {
+          <div className="flex flex-wrap items-center gap-0">
+            <div className="ml-4 mr-2 text-xs text-slate-500">配置版本</div>
+            <div className="mr-4 rounded-sm border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-2 py-1 text-xs text-slate-700">
+              {config ? "自定义" : "默认"}
+            </div>
+            <Link
+              href="/settings"
+              className="ml-auto mr-4 flex items-center gap-2 border border-dashed border-[#b7bcc2] bg-white px-3 py-1 text-sm text-slate-700 hover:bg-[#fdfbf5]"
+            >
+              <span>设置</span>
+            </Link>
+            {config?.modules.map((module, index) => {
+
               const isActive = selectedModule === module.id;
               const isFirst = index === 0;
-              const isLast = index === modules.length - 1;
+              const isLast = index === (config?.modules.length ?? 0) - 1;
+
               return (
                 <button
                   key={module.id}
@@ -56,6 +87,7 @@ export default function Home() {
                     setSelectedModule(module.id);
                     setSelectedCategory(null);
                   }}
+
                   className={`border-l border-dashed border-[#b7bcc2] px-4 py-2 text-sm text-left transition-colors ${
                     isLast ? "border-r" : "border-r-0"
                   } ${
@@ -80,6 +112,7 @@ export default function Home() {
               selectedCategoryId={selectedCategory}
               onSelect={(id) => setSelectedCategory(id)}
             />
+
           </div>
           <main className="lg:col-span-10 xl:col-span-10">
             <div className="flex h-full flex-col gap-4 border border-dashed border-[#b7bcc2] bg-white/90 p-5">
@@ -94,8 +127,9 @@ export default function Home() {
                     const categoryName = flatCategories.find(
                       (c) => c.id === bookmark.categoryId,
                     )?.name;
-                    const moduleName = modules.find((m) => m.id === bookmark.moduleId)?.name;
+                    const moduleName = config?.modules.find((m) => m.id === bookmark.moduleId)?.name;
                     return (
+
                       <BookmarkCard
                         key={bookmark.id}
                         bookmark={bookmark}
