@@ -7,13 +7,15 @@ import SidebarTree from "@/components/SidebarTree";
 import { loadActiveConfig } from "@/lib/config";
 import { AppConfig, Category } from "@/types";
 
+const buildCategoryTree = (categories: Category[], parentId?: string): Category[] => {
+  return categories
+    .filter((item) => item.parentId === parentId)
+    .map((item) => ({ ...item, children: buildCategoryTree(categories, item.id) }));
+};
+
 const flattenCategories = (categories: Category[]): Category[] => {
   return categories.reduce<Category[]>((acc, current) => {
-    return [
-      ...acc,
-      current,
-      ...(current.children ? flattenCategories(current.children) : []),
-    ];
+    return [...acc, current, ...(current.children ? flattenCategories(current.children) : [])];
   }, []);
 };
 
@@ -32,14 +34,8 @@ export default function Home() {
 
   const categoryTree = useMemo(() => {
     if (!config) return [];
-    const roots = config.categories.filter((item) => item.moduleId === selectedModule && !item.parentId);
-    const childrenMap = config.categories.reduce<Record<string, Category[]>>((acc, item) => {
-      if (item.parentId) {
-        acc[item.parentId] = acc[item.parentId] ? [...acc[item.parentId], item] : [item];
-      }
-      return acc;
-    }, {});
-    return roots.map((root) => ({ ...root, children: childrenMap[root.id] ?? [] }));
+    const moduleCategories = config.categories.filter((item) => item.moduleId === selectedModule);
+    return buildCategoryTree(moduleCategories);
   }, [config, selectedModule]);
 
   const flatCategories = useMemo(
@@ -47,16 +43,41 @@ export default function Home() {
     [categoryTree],
   );
 
+  const selectedCategorySet = useMemo(() => {
+    if (!selectedCategory) return null;
+
+    const collectIds = (nodes: Category[]): string[] => {
+      return nodes.flatMap((node) => [node.id, ...(node.children ? collectIds(node.children) : [])]);
+    };
+
+    const stack: Category[] = [...categoryTree];
+    let target: Category | undefined;
+    while (stack.length) {
+      const current = stack.pop();
+      if (!current) break;
+      if (current.id === selectedCategory) {
+        target = current;
+        break;
+      }
+      if (current.children) {
+        stack.push(...current.children);
+      }
+    }
+
+    if (!target) return null;
+    return new Set<string>(collectIds([target]));
+  }, [categoryTree, selectedCategory]);
+
   const filteredBookmarks = useMemo(() => {
     if (!config) return [];
     return config.bookmarks.filter((bookmark) => {
       const matchModule = bookmark.moduleId === selectedModule;
-      const matchCategory = selectedCategory
-        ? bookmark.categoryId === selectedCategory
+      const matchCategory = selectedCategorySet
+        ? selectedCategorySet.has(bookmark.categoryId)
         : true;
       return matchModule && matchCategory;
     });
-  }, [config, selectedCategory, selectedModule]);
+  }, [config, selectedCategorySet, selectedModule]);
 
   return (
     <div className="min-h-screen bg-[#fdfbf5] text-slate-900">
@@ -91,7 +112,7 @@ export default function Home() {
             </div>
             <Link
               href="/settings"
-              className="flex items-center gap-2 border border-dashed border-[#b7bcc2] bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-[#fdfbf5] shrink-0"
+              className="flex items-center gap-2 border-l border-dashed border-[#b7bcc2] bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-[#fdfbf5] shrink-0"
             >
               <span>设置</span>
             </Link>

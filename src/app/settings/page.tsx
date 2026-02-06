@@ -57,7 +57,6 @@ export default function SettingsPage() {
     if (result.added) {
       setConfigs(result.stored);
       showInfo(`已保存并生效：${result.newVersion}`);
-      router.push("/");
     } else {
       showWarn("内容与当前配置相同，无需保存");
     }

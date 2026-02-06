@@ -7,29 +7,215 @@ type StoredConfig = {
   yaml: string;
 };
 
-const STORAGE_KEY = "bookmarkhub-yaml-configs";
-
-const flattenModuleCategories = (categoryMap: Record<string, Category[]>): Category[] => {
-  return Object.values(categoryMap).flatMap((roots) => {
-    return roots.flatMap((root) => {
-      const { children, ...rootWithoutChildren } = root;
-      const rootEntry: Category = rootWithoutChildren;
-      const childEntries = root.children?.map((child) => {
-        const { children: _ignored, ...childWithoutChildren } = child;
-        return childWithoutChildren;
-      });
-      return [rootEntry, ...(childEntries ?? [])];
-    });
-  });
+type YamlLink = {
+  title?: string;
+  url?: string;
+  description?: string;
 };
 
-export const defaultConfig: AppConfig = {
+type YamlCategory = {
+  name?: string;
+  urls?: YamlLink[];
+  children?: YamlCategory[];
+};
+
+type YamlModule = {
+  name?: string;
+  description?: string;
+  categories?: YamlCategory[];
+  urls?: YamlLink[];
+};
+
+type BookmarkhubRoot = {
+  bookmarkhub?: YamlModule[];
+};
+
+const STORAGE_KEY = "bookmarkhub-yaml-configs";
+
+const slugify = (value: string) => {
+  return value
+    .normalize("NFKD")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
+    || "item";
+};
+
+const uniqueId = (base: string, used: Set<string>) => {
+  if (!used.has(base)) {
+    used.add(base);
+    return base;
+  }
+
+  let counter = 2;
+  let next = `${base}-${counter}`;
+  while (used.has(next)) {
+    counter += 1;
+    next = `${base}-${counter}`;
+  }
+  used.add(next);
+  return next;
+};
+
+const buildAppConfigFromBookmarkhub = (data: BookmarkhubRoot): AppConfig | null => {
+  if (!data || !Array.isArray(data.bookmarkhub)) return null;
+
+  const modulesList: Module[] = [];
+  const categoriesList: Category[] = [];
+  const bookmarksList: Bookmark[] = [];
+
+  const usedModuleIds = new Set<string>();
+  const usedCategoryIds = new Set<string>();
+  const usedBookmarkIds = new Set<string>();
+
+  const addBookmarks = (params: {
+    links?: YamlLink[];
+    moduleId: string;
+    categoryId: string;
+    path: string[];
+  }) => {
+    const { links, moduleId, categoryId, path } = params;
+    if (!Array.isArray(links)) return;
+
+    links.forEach((link, index) => {
+      if (!link?.title || !link?.url) return;
+      const linkSlug = slugify(link.title) || `url-${index + 1}`;
+      const bookmarkBase = [...path, linkSlug].join("__");
+      const bookmarkId = uniqueId(bookmarkBase, usedBookmarkIds);
+
+      bookmarksList.push({
+        id: bookmarkId,
+        title: link.title,
+        url: link.url,
+        description: link.description ?? "",
+        moduleId,
+        categoryId,
+      });
+    });
+  };
+
+  const walkCategory = (node: YamlCategory, ctx: { moduleId: string; parentId?: string; path: string[] }) => {
+    if (!node?.name) return;
+    const slug = slugify(node.name);
+    const currentPath = [...ctx.path, slug];
+    const categoryBase = currentPath.join("__");
+    const categoryId = uniqueId(categoryBase, usedCategoryIds);
+
+    categoriesList.push({
+      id: categoryId,
+      name: node.name,
+      moduleId: ctx.moduleId,
+      parentId: ctx.parentId,
+    });
+
+    addBookmarks({ links: node.urls, moduleId: ctx.moduleId, categoryId, path: currentPath });
+
+    if (Array.isArray(node.children)) {
+      node.children.forEach((child) => {
+        walkCategory(child, { moduleId: ctx.moduleId, parentId: categoryId, path: currentPath });
+      });
+    }
+  };
+
+  data.bookmarkhub.forEach((moduleNode) => {
+    if (!moduleNode?.name) return;
+    const moduleSlug = slugify(moduleNode.name);
+    const moduleId = uniqueId(moduleSlug, usedModuleIds);
+
+    modulesList.push({
+      id: moduleId,
+      name: moduleNode.name,
+      description: moduleNode.description,
+    });
+
+    // 允许模块直接挂 urls（较少见，但保持兼容）
+    addBookmarks({ links: moduleNode.urls, moduleId, categoryId: moduleId, path: [moduleSlug] });
+
+    if (Array.isArray(moduleNode.categories)) {
+      moduleNode.categories.forEach((cat) => {
+        walkCategory(cat, { moduleId, path: [moduleSlug] });
+      });
+    }
+  });
+
+  if (modulesList.length === 0) return null;
+
+  return {
+    modules: modulesList,
+    categories: categoriesList,
+    bookmarks: bookmarksList,
+  };
+};
+
+const buildAppConfigFromFlat = (parsed: Partial<AppConfig>): AppConfig | null => {
+  const { modules: parsedModules, categories: parsedCategories, bookmarks: parsedBookmarks } = parsed;
+  if (!Array.isArray(parsedModules) || !Array.isArray(parsedCategories) || !Array.isArray(parsedBookmarks)) {
+    return null;
+  }
+  return {
+    modules: parsedModules,
+    categories: parsedCategories,
+    bookmarks: parsedBookmarks,
+  };
+};
+
+const buildDefaultBookmarkhub = (): BookmarkhubRoot => {
+  const rootModules = modules.map<YamlModule>((mod) => ({
+    name: mod.name,
+    description: mod.description,
+    categories: [],
+  }));
+
+  const moduleIndex = Object.fromEntries(rootModules.map((mod, idx) => [modules[idx].id, mod]));
+
+  Object.entries(moduleCategories).forEach(([moduleId, roots]) => {
+    const targetModule = moduleIndex[moduleId];
+    if (!targetModule) return;
+
+    const categoryMap: Record<string, YamlCategory> = {};
+
+    const cloneCategory = (cat: Category): YamlCategory => {
+      const node: YamlCategory = { name: cat.name };
+      categoryMap[cat.id] = node;
+      if (cat.children?.length) {
+        node.children = cat.children.map(cloneCategory);
+      }
+      return node;
+    };
+
+    targetModule.categories = roots.map(cloneCategory);
+
+    const moduleBookmarks = bookmarks.filter((b) => b.moduleId === moduleId);
+    moduleBookmarks.forEach((bm) => {
+      const targetCategory = categoryMap[bm.categoryId];
+      if (!targetCategory) return;
+      if (!Array.isArray(targetCategory.urls)) targetCategory.urls = [];
+      targetCategory.urls.push({ title: bm.title, url: bm.url, description: bm.description });
+    });
+  });
+
+  return { bookmarkhub: rootModules };
+};
+
+const defaultBookmarkhub = buildDefaultBookmarkhub();
+const defaultAppConfig = buildAppConfigFromBookmarkhub(defaultBookmarkhub);
+const legacyCategories = Object.values(moduleCategories).flatMap((roots) => {
+  return roots.flatMap((root) => {
+    const { children, ...rootRest } = root;
+    const childEntries = root.children?.map(({ children: _ignored, ...childRest }) => childRest) ?? [];
+    return [rootRest, ...childEntries];
+  });
+});
+
+export const defaultConfig: AppConfig = defaultAppConfig ?? {
   modules,
-  categories: flattenModuleCategories(moduleCategories),
+  categories: legacyCategories,
   bookmarks,
 };
 
-export const defaultConfigYaml = YAML.stringify(defaultConfig);
+export const defaultConfigYaml = YAML.stringify(defaultBookmarkhub);
 
 const parseTimestampFromVersion = (version: string): number => {
   const numeric = version.replace(/\.yaml$/i, "");
@@ -51,15 +237,13 @@ export const parseYamlToConfig = (yamlText: string): AppConfig | null => {
   try {
     const parsed = YAML.parse(yamlText);
     if (!parsed || typeof parsed !== "object") return null;
-    const { modules: parsedModules, categories: parsedCategories, bookmarks: parsedBookmarks } = parsed as Partial<AppConfig>;
-    if (!Array.isArray(parsedModules) || !Array.isArray(parsedCategories) || !Array.isArray(parsedBookmarks)) {
-      return null;
-    }
-    return {
-      modules: parsedModules,
-      categories: parsedCategories,
-      bookmarks: parsedBookmarks,
-    };
+    const newFormat = buildAppConfigFromBookmarkhub(parsed as BookmarkhubRoot);
+    if (newFormat) return newFormat;
+
+    const legacy = buildAppConfigFromFlat(parsed as Partial<AppConfig>);
+    if (legacy) return legacy;
+
+    return null;
   } catch (error) {
     console.error("Failed to parse YAML", error);
     return null;
