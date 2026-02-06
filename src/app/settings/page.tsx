@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createStorage,
   defaultConfigYaml,
@@ -13,8 +13,10 @@ import {
   StoredConfig,
   StorageKind,
   StorageSettings,
+  GithubSettings,
   WebdavSettings,
 } from "@/lib/config";
+import { StorageSettingsForm } from "./components/StorageSettingsForm";
 import { NoticeBar, useNotice } from "@/lib/notice";
 
 export default function SettingsPage() {
@@ -27,24 +29,24 @@ export default function SettingsPage() {
     password: "",
     remotePath: "",
   });
+  const [githubDraft, setGithubDraft] = useState<GithubSettings>(() => defaultStorageSettings.github ?? {
+    owner: "",
+    repo: "",
+    branch: "",
+    token: "",
+    remotePath: "",
+  });
   const [loading, setLoading] = useState(false);
   const { activeVersion } = useMemo(() => resolveActiveFromList(configs), [configs]);
   const { notice, showInfo, showWarn, showError } = useNotice();
 
+   // stabilize notice functions for callbacks to avoid dependency churn
+  const showErrorRef = useRef(showError);
   useEffect(() => {
-    const settings = loadStorageSettings();
-    setStorageSettings(settings);
-    const draft = settings.webdav ?? defaultStorageSettings.webdav ?? {
-      endpoint: "",
-      username: "",
-      password: "",
-      remotePath: "",
-    };
-    setWebdavDraft(draft);
-    refreshFromStorage(settings);
-  }, []);
+    showErrorRef.current = showError;
+  }, [showError]);
 
-  const refreshFromStorage = async (settings: StorageSettings = storageSettings) => {
+  const refreshFromStorage = useCallback(async (settings: StorageSettings) => {
     setLoading(true);
     try {
       const storage = createStorage(settings);
@@ -53,21 +55,57 @@ export default function SettingsPage() {
       setConfigs(sorted);
     } catch (error) {
       console.error(error);
-      showError("加载配置失败，已回退到默认配置");
+      showErrorRef.current?.("加载配置失败，已回退到默认配置");
       setYamlInput(defaultConfigYaml);
       setConfigs([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const requireWebdavReady = (settings: StorageSettings) => {
-    if (settings.kind !== "webdav") return true;
-    const { endpoint, remotePath } = settings.webdav ?? {};
-    if (!endpoint || !remotePath) {
-      showWarn("请填写 WebDAV 地址与存储路径");
-      return false;
+  useEffect(() => {
+    const settings = loadStorageSettings();
+    setStorageSettings(settings);
+    setWebdavDraft(normalizeWebdav(settings.webdav));
+    setGithubDraft(normalizeGithub(settings.github));
+    refreshFromStorage(settings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const normalizeWebdav = (value?: WebdavSettings): WebdavSettings => ({
+    endpoint: value?.endpoint ?? defaultStorageSettings.webdav?.endpoint ?? "",
+    username: value?.username ?? defaultStorageSettings.webdav?.username ?? "",
+    password: value?.password ?? defaultStorageSettings.webdav?.password ?? "",
+    remotePath: value?.remotePath ?? defaultStorageSettings.webdav?.remotePath ?? "",
+  });
+
+  const normalizeGithub = (value?: GithubSettings): GithubSettings => ({
+    owner: value?.owner ?? defaultStorageSettings.github?.owner ?? "",
+    repo: value?.repo ?? defaultStorageSettings.github?.repo ?? "",
+    branch: value?.branch ?? defaultStorageSettings.github?.branch ?? "",
+    token: value?.token ?? defaultStorageSettings.github?.token ?? "",
+    remotePath: value?.remotePath ?? defaultStorageSettings.github?.remotePath ?? "",
+  });
+
+  const requireStorageReady = (settings: StorageSettings) => {
+    if (settings.kind === "webdav") {
+      const { endpoint, remotePath } = settings.webdav ?? {};
+      if (!endpoint || !remotePath) {
+        showWarn("请填写 WebDAV 地址与存储路径");
+        return false;
+      }
+      return true;
     }
+
+    if (settings.kind === "github") {
+      const { owner, repo, branch, token, remotePath } = settings.github ?? {};
+      if (!owner || !repo || !branch || !remotePath || !token) {
+        showWarn("请填写 GitHub 仓库信息（owner/repo/branch/token/目录）");
+        return false;
+      }
+      return true;
+    }
+
     return true;
   };
 
@@ -77,7 +115,7 @@ export default function SettingsPage() {
       showError("YAML 解析失败，请检查格式");
       return;
     }
-    if (!requireWebdavReady(storageSettings)) return;
+    if (!requireStorageReady(storageSettings)) return;
     setLoading(true);
     try {
       const storage = createStorage(storageSettings);
@@ -97,7 +135,7 @@ export default function SettingsPage() {
   };
 
   const handleDelete = async (version: string) => {
-    if (!requireWebdavReady(storageSettings)) return;
+    if (!requireStorageReady(storageSettings)) return;
     setLoading(true);
     try {
       const storage = createStorage(storageSettings);
@@ -113,7 +151,7 @@ export default function SettingsPage() {
   };
 
   const handleUseDefault = async () => {
-    if (!requireWebdavReady(storageSettings)) return;
+    if (!requireStorageReady(storageSettings)) return;
     setLoading(true);
     try {
       const storage = createStorage(storageSettings);
@@ -135,7 +173,7 @@ export default function SettingsPage() {
       showError("YAML 解析失败，请检查格式");
       return;
     }
-    if (!requireWebdavReady(storageSettings)) return;
+    if (!requireStorageReady(storageSettings)) return;
     setLoading(true);
     try {
       const storage = createStorage(storageSettings);
@@ -159,22 +197,38 @@ export default function SettingsPage() {
   }, [configs]);
 
   const handleStorageKindChange = (kind: StorageKind) => {
-    if (kind === "webdav" && storageSettings.webdav) {
-      setWebdavDraft(storageSettings.webdav);
+    if (kind === "webdav") {
+      setWebdavDraft(normalizeWebdav(storageSettings.webdav));
     }
-    const next: StorageSettings = { ...storageSettings, kind };
+    if (kind === "github") {
+      setGithubDraft(normalizeGithub(storageSettings.github));
+    }
+
+    const next: StorageSettings = {
+      ...storageSettings,
+      kind,
+      webdav: normalizeWebdav(storageSettings.webdav),
+      github: normalizeGithub(storageSettings.github),
+    };
     setStorageSettings(next);
     saveStorageSettings(next);
     refreshFromStorage(next);
   };
 
   const handleWebdavFieldChange = (field: keyof NonNullable<StorageSettings["webdav"]>, value: string) => {
-    const nextWebdav: WebdavSettings = {
-      ...defaultStorageSettings.webdav,
+    const nextWebdav: WebdavSettings = normalizeWebdav({
       ...webdavDraft,
       [field]: value,
-    };
+    });
     setWebdavDraft(nextWebdav);
+  };
+
+  const handleGithubFieldChange = (field: keyof NonNullable<StorageSettings["github"]>, value: string) => {
+    const nextGithub: GithubSettings = normalizeGithub({
+      ...githubDraft,
+      [field]: value,
+    });
+    setGithubDraft(nextGithub);
   };
 
   const handleSaveWebdavConfig = async () => {
@@ -187,11 +241,12 @@ export default function SettingsPage() {
 
     const nextSettings: StorageSettings = {
       kind: "webdav",
-      webdav: {
+      webdav: normalizeWebdav({
         ...webdavDraft,
         endpoint,
         remotePath,
-      },
+      }),
+      github: normalizeGithub(storageSettings.github),
     };
 
     const parsed = parseYamlToConfig(yamlInput);
@@ -206,9 +261,7 @@ export default function SettingsPage() {
       const result = await storage.addConfigIfChanged(yamlInput);
       if (result.added) {
         saveStorageSettings(nextSettings);
-        console.log("WebDAV 配置已保存，正在刷新...");
         setStorageSettings(nextSettings);
-        console.log("WebDAV 配置已生效，正在刷新...1");
         setWebdavDraft(nextSettings.webdav!);
         showInfo("WebDAV 配置已保存并生效");
         await refreshFromStorage(nextSettings);
@@ -218,6 +271,59 @@ export default function SettingsPage() {
     } catch (error) {
       console.error(error);
       const message = error instanceof Error ? error.message : "保存失败，请检查 WebDAV 配置";
+      showError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveGithubConfig = async () => {
+    const owner = githubDraft.owner?.trim();
+    const repo = githubDraft.repo?.trim();
+    const branch = githubDraft.branch?.trim();
+    const token = githubDraft.token?.trim();
+    const remotePath = githubDraft.remotePath?.trim();
+
+    if (!owner || !repo || !branch || !remotePath || !token) {
+      showWarn("请填写 GitHub 仓库、分支、Token 与目录");
+      return;
+    }
+
+    const nextSettings: StorageSettings = {
+      kind: "github",
+      github: normalizeGithub({
+        ...githubDraft,
+        owner,
+        repo,
+        branch,
+        token,
+        remotePath,
+      }),
+      webdav: normalizeWebdav(storageSettings.webdav),
+    };
+
+    const parsed = parseYamlToConfig(yamlInput);
+    if (!parsed) {
+      showError("YAML 解析失败，请检查格式");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const storage = createStorage(nextSettings);
+      const result = await storage.addConfigIfChanged(yamlInput);
+      if (result.added) {
+        saveStorageSettings(nextSettings);
+        setStorageSettings(nextSettings);
+        setGithubDraft(nextSettings.github!);
+        showInfo("GitHub 仓库存储已保存并生效");
+        await refreshFromStorage(nextSettings);
+      } else {
+        showWarn("内容未变化，无需保存");
+      }
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "保存失败，请检查 GitHub 配置";
       showError(message);
     } finally {
       setLoading(false);
@@ -245,6 +351,7 @@ export default function SettingsPage() {
               >
                 <option value="browser">浏览器</option>
                 <option value="webdav">WebDAV</option>
+                <option value="github">GitHub</option>
               </select>
             </div>
             <button
@@ -264,67 +371,16 @@ export default function SettingsPage() {
           </div>
         </header>
 
-        {storageSettings.kind === "webdav" && (
-          <section className="border border-dashed border-[#b7bcc2] bg-white/90 p-4 text-sm text-slate-700">
-            <div className="mb-3 text-xs uppercase tracking-[0.12em] text-slate-500">WebDAV 设置</div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-slate-500">地址（Base URL 或完整文件 URL）</span>
-                <input
-                  type="text"
-                  className="border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-2 py-1 text-sm text-slate-800 focus:outline-none"
-                  value={webdavDraft.endpoint}
-                  onChange={(e) => handleWebdavFieldChange("endpoint", e.target.value)}
-                  placeholder="https://dav.example.com/"
-                  disabled={loading}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-slate-500">存储路径（目录）</span>
-                <input
-                  type="text"
-                  className="border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-2 py-1 text-sm text-slate-800 focus:outline-none"
-                  value={webdavDraft.remotePath}
-                  onChange={(e) => handleWebdavFieldChange("remotePath", e.target.value)}
-                  placeholder="bookmarkhub"
-                  disabled={loading}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-slate-500">用户名</span>
-                <input
-                  type="text"
-                  className="border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-2 py-1 text-sm text-slate-800 focus:outline-none"
-                  value={webdavDraft.username ?? ""}
-                  onChange={(e) => handleWebdavFieldChange("username", e.target.value)}
-                  placeholder="可选"
-                  disabled={loading}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-slate-500">密码</span>
-                <input
-                  type="password"
-                  className="border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-2 py-1 text-sm text-slate-800 focus:outline-none"
-                  value={webdavDraft.password ?? ""}
-                  onChange={(e) => handleWebdavFieldChange("password", e.target.value)}
-                  placeholder="可选"
-                  disabled={loading}
-                />
-              </label>
-            </div>
-            <div className="mt-3 flex w-full flex-wrap items-center justify-end gap-3 text-xs text-slate-500">
-              <button
-                type="button"
-                onClick={handleSaveWebdavConfig}
-                className="border border-dashed border-[#b7bcc2] bg-white px-3 py-1 text-sm text-slate-700 hover:bg-[#fdfbf5] disabled:opacity-60"
-                disabled={loading}
-              >
-                保存
-              </button>
-            </div>
-          </section>
-        )}
+        <StorageSettingsForm
+          storageSettings={storageSettings}
+          webdavDraft={webdavDraft}
+          githubDraft={githubDraft}
+          loading={loading}
+          onWebdavFieldChange={handleWebdavFieldChange}
+          onGithubFieldChange={handleGithubFieldChange}
+          onSaveWebdavConfig={handleSaveWebdavConfig}
+          onSaveGithubConfig={handleSaveGithubConfig}
+        />
 
         <section className="grid gap-6 lg:grid-cols-12">
           <div className="lg:col-span-7 flex flex-col gap-3 border border-dashed border-[#b7bcc2] bg-white/90 p-4">

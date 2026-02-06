@@ -1,6 +1,6 @@
 import YAML from "yaml";
+import defaultYamlText from "@/data/bookmarkhub.yaml";
 import { AppConfig, Bookmark, Category, Module } from "@/types";
-import { bookmarks, moduleCategories, modules } from "@/data/bookmarks";
 
 type StoredConfig = {
   version: string;
@@ -32,8 +32,8 @@ type BookmarkhubRoot = {
 
 const STORAGE_KEY = "bookmarkhub-yaml-configs";
 const STORAGE_SETTINGS_KEY = "bookmarkhub-storage-settings";
-const WEBDAV_INDEX_FILE = "bookmarkhub-index.json";
-const WEBDAV_LEGACY_FILE = "bookmarkhub-configs.json";
+const INDEX_FILE = "bookmarkhub-index.json";
+const LEGACY_FILE = "bookmarkhub-configs.json";
 
 const slugify = (value: string) => {
   return value
@@ -164,63 +164,27 @@ const buildAppConfigFromFlat = (parsed: Partial<AppConfig>): AppConfig | null =>
   };
 };
 
-const buildDefaultBookmarkhub = (): BookmarkhubRoot => {
-  const rootModules = modules.map<YamlModule>((mod) => ({
-    name: mod.name,
-    description: mod.description,
-    categories: [],
-  }));
-
-  const moduleIndex = Object.fromEntries(rootModules.map((mod, idx) => [modules[idx].id, mod]));
-
-  Object.entries(moduleCategories).forEach(([moduleId, roots]) => {
-    const targetModule = moduleIndex[moduleId];
-    if (!targetModule) return;
-
-    const categoryMap: Record<string, YamlCategory> = {};
-
-    const cloneCategory = (cat: Category): YamlCategory => {
-      const node: YamlCategory = { name: cat.name };
-      categoryMap[cat.id] = node;
-      if (cat.children?.length) {
-        node.children = cat.children.map(cloneCategory);
-      }
-      return node;
-    };
-
-    targetModule.categories = roots.map(cloneCategory);
-
-    const moduleBookmarks = bookmarks.filter((b) => b.moduleId === moduleId);
-    moduleBookmarks.forEach((bm) => {
-      const targetCategory = categoryMap[bm.categoryId];
-      if (!targetCategory) return;
-      if (!Array.isArray(targetCategory.urls)) targetCategory.urls = [];
-      targetCategory.urls.push({ title: bm.title, url: bm.url, description: bm.description });
-    });
-  });
-
-  return { bookmarkhub: rootModules };
+const parseDefaultBookmarkhub = (): BookmarkhubRoot => {
+  try {
+    const parsed = YAML.parse(defaultYamlText) as BookmarkhubRoot;
+    if (parsed && Array.isArray(parsed.bookmarkhub)) {
+      return parsed;
+    }
+  } catch (error) {
+    console.error("Failed to parse default bookmarkhub YAML", error);
+  }
+  return { bookmarkhub: [] };
 };
 
-const defaultBookmarkhub = buildDefaultBookmarkhub();
+const defaultBookmarkhub = parseDefaultBookmarkhub();
 const defaultAppConfig = buildAppConfigFromBookmarkhub(defaultBookmarkhub);
-const legacyCategories = Object.values(moduleCategories).flatMap((roots) => {
-  return roots.flatMap((root) => {
-    const { children, ...rootRest } = root;
-    const childEntries = root.children?.map(({ children: _ignored, ...childRest }) => childRest) ?? [];
-    return [rootRest, ...childEntries];
-  });
-});
+const emptyAppConfig: AppConfig = { modules: [], categories: [], bookmarks: [] };
 
-export const defaultConfig: AppConfig = defaultAppConfig ?? {
-  modules,
-  categories: legacyCategories,
-  bookmarks,
-};
+export const defaultConfig: AppConfig = defaultAppConfig ?? emptyAppConfig;
 
-export const defaultConfigYaml = YAML.stringify(defaultBookmarkhub);
+export const defaultConfigYaml = defaultYamlText;
 
-export type StorageKind = "browser" | "webdav";
+export type StorageKind = "browser" | "webdav" | "github";
 
 export type WebdavSettings = {
   endpoint: string;
@@ -229,9 +193,18 @@ export type WebdavSettings = {
   remotePath: string;
 };
 
+export type GithubSettings = {
+  owner: string;
+  repo: string;
+  branch: string;
+  token?: string;
+  remotePath: string;
+};
+
 type WebdavIndexEntry = {
   version: string;
   file: string;
+  sha?: string;
   mtime?: string;
   size?: number;
 };
@@ -244,6 +217,7 @@ type WebdavIndex = {
 export type StorageSettings = {
   kind: StorageKind;
   webdav?: WebdavSettings;
+  github?: GithubSettings;
 };
 
 const defaultWebdavSettings: WebdavSettings = {
@@ -253,9 +227,18 @@ const defaultWebdavSettings: WebdavSettings = {
   remotePath: "bookmarkhub",
 };
 
+const defaultGithubSettings: GithubSettings = {
+  owner: "",
+  repo: "",
+  branch: "main",
+  token: "",
+  remotePath: "bookmarkhub",
+};
+
 export const defaultStorageSettings: StorageSettings = {
   kind: "browser",
   webdav: defaultWebdavSettings,
+  github: defaultGithubSettings,
 };
 
 const parseTimestampFromVersion = (version: string): number => {
@@ -344,6 +327,26 @@ const joinRemotePath = (endpoint: string, remotePath: string) => {
   }
 };
 
+const toBase64 = (value: string) => {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(value, "utf-8").toString("base64");
+  }
+  if (typeof btoa !== "undefined") {
+    return btoa(unescape(encodeURIComponent(value)));
+  }
+  throw new Error("Base64 encoding is not supported in this environment");
+};
+
+const fromBase64 = (value: string) => {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(value, "base64").toString("utf-8");
+  }
+  if (typeof atob !== "undefined") {
+    return decodeURIComponent(escape(atob(value)));
+  }
+  throw new Error("Base64 decoding is not supported in this environment");
+};
+
 abstract class ConfigStorage {
   abstract loadStoredConfigs(): Promise<StoredConfig[]>;
   abstract saveStoredConfigs(configs: StoredConfig[]): Promise<void>;
@@ -419,7 +422,7 @@ class WebdavConfigStorage extends ConfigStorage {
 
   private indexUrl() {
     const dir = this.dirPath();
-    const targetPath = dir ? `${dir}/${WEBDAV_INDEX_FILE}` : WEBDAV_INDEX_FILE;
+    const targetPath = dir ? `${dir}/${INDEX_FILE}` : INDEX_FILE;
     return joinRemotePath(this.settings.endpoint, targetPath);
   }
 
@@ -430,7 +433,7 @@ class WebdavConfigStorage extends ConfigStorage {
   }
 
   private legacyUrl() {
-    return this.versionUrl(WEBDAV_LEGACY_FILE);
+    return this.versionUrl(LEGACY_FILE);
   }
 
   private authHeader(): Record<string, string> {
@@ -762,6 +765,317 @@ class WebdavConfigStorage extends ConfigStorage {
   }
 }
 
+type GithubContent = {
+  content: string;
+  sha?: string;
+};
+
+class GithubConfigStorage extends ConfigStorage {
+  private settings: GithubSettings;
+
+  constructor(settings: GithubSettings) {
+    super();
+    this.settings = settings;
+  }
+
+  private headers(): Record<string, string> {
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github+json",
+    };
+    if (this.settings.token) {
+      headers.Authorization = `token ${this.settings.token}`;
+    }
+    return headers;
+  }
+
+  private contentPath(fileName: string) {
+    const dir = this.settings.remotePath.replace(/^\/+/g, "").replace(/\/+$/g, "");
+    return dir ? `${dir}/${fileName}` : fileName;
+  }
+
+  private contentUrl(fileName: string) {
+    const path = this.contentPath(fileName)
+      .split("/")
+      .filter(Boolean)
+      .map((part) => encodeURIComponent(part))
+      .join("/");
+    const owner = encodeURIComponent(this.settings.owner);
+    const repo = encodeURIComponent(this.settings.repo);
+    return `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  }
+
+  private async fetchContent(fileName: string): Promise<GithubContent | null> {
+    const url = `${this.contentUrl(fileName)}?ref=${encodeURIComponent(this.settings.branch)}`;
+    const response = await fetch(url, { headers: this.headers() });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error(`GitHub load failed: ${response.status}`);
+    }
+    const json = (await response.json()) as { content?: string; sha?: string };
+    const content = json.content ? fromBase64(json.content) : "";
+    return { content, sha: typeof json.sha === "string" ? json.sha : undefined };
+  }
+
+  private async putContent(fileName: string, content: string, sha?: string) {
+    const url = this.contentUrl(fileName);
+    const body: Record<string, unknown> = {
+      message: `bookmarkhub: update ${fileName}`,
+      content: toBase64(content),
+      branch: this.settings.branch,
+    };
+    if (sha) body.sha = sha;
+
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.headers(),
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub save failed: ${response.status}`);
+    }
+
+    const json = (await response.json()) as { content?: { sha?: string }; sha?: string };
+    return json.content?.sha ?? json.sha;
+  }
+
+  private async deleteContent(fileName: string, sha: string) {
+    const url = this.contentUrl(fileName);
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.headers(),
+      },
+      body: JSON.stringify({
+        message: `bookmarkhub: delete ${fileName}`,
+        sha,
+        branch: this.settings.branch,
+      }),
+    });
+
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`GitHub delete failed: ${response.status}`);
+    }
+  }
+
+  private sanitizeIndex(parsed: WebdavIndex): WebdavIndex {
+    const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+    const filtered = entries.filter((item): item is WebdavIndexEntry => {
+      return typeof item?.version === "string" && typeof item?.file === "string";
+    });
+    return {
+      activeVersion: typeof parsed?.activeVersion === "string" ? parsed.activeVersion : undefined,
+      entries: filtered,
+    };
+  }
+
+  private async loadIndex(): Promise<{ index: WebdavIndex; sha?: string }> {
+    const result = await this.fetchContent(INDEX_FILE);
+    if (!result) {
+      return { index: { activeVersion: undefined, entries: [] }, sha: undefined };
+    }
+    try {
+      const parsed = JSON.parse(result.content) as WebdavIndex;
+      return { index: this.sanitizeIndex(parsed), sha: result.sha };
+    } catch (error) {
+      console.error("Failed to parse GitHub index", error);
+      return { index: { activeVersion: undefined, entries: [] }, sha: result.sha };
+    }
+  }
+
+  private async putIndex(index: WebdavIndex, sha?: string) {
+    return this.putContent(INDEX_FILE, JSON.stringify(index), sha);
+  }
+
+  private async loadConfigsFromIndex(index: WebdavIndex): Promise<StoredConfig[]> {
+    const results = await Promise.all(
+      index.entries.map(async (entry) => {
+        try {
+          const content = await this.fetchContent(entry.file);
+          if (!content) return null;
+          return { version: entry.version, yaml: content.content } as StoredConfig;
+        } catch (error) {
+          console.error("Failed to load GitHub version", entry.version, error);
+          return null;
+        }
+      }),
+    );
+
+    return results.filter((item): item is StoredConfig => Boolean(item));
+  }
+
+  private async loadLegacyConfigs(): Promise<StoredConfig[]> {
+    try {
+      const legacy = await this.fetchContent(LEGACY_FILE);
+      if (!legacy || !legacy.content) return [];
+      const parsed = JSON.parse(legacy.content);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((item): item is StoredConfig => {
+        return typeof item?.version === "string" && typeof item?.yaml === "string";
+      });
+    } catch (error) {
+      console.error("Failed to load legacy GitHub configs", error);
+      return [];
+    }
+  }
+
+  private async loadIndexAndConfigs(): Promise<{ index: WebdavIndex; indexSha?: string; configs: StoredConfig[] }> {
+    const { index, sha } = await this.loadIndex();
+    let configs = await this.loadConfigsFromIndex(index);
+    if (configs.length === 0) {
+      configs = await this.loadLegacyConfigs();
+    }
+    return { index, indexSha: sha, configs: sortConfigsDesc(configs) };
+  }
+
+  async loadStoredConfigs(): Promise<StoredConfig[]> {
+    const { configs } = await this.loadIndexAndConfigs();
+    return configs;
+  }
+
+  async loadActiveConfig() {
+    const { index, configs } = await this.loadIndexAndConfigs();
+    const sorted = sortConfigsDesc(configs);
+
+    const activeFromIndex = index.activeVersion
+      ? configs.find((item) => item.version === index.activeVersion)
+      : undefined;
+    const activeCandidate = activeFromIndex ?? sorted[0];
+
+    if (!activeCandidate) {
+      return {
+        activeVersion: "default",
+        activeYaml: defaultConfigYaml,
+        activeConfig: defaultConfig,
+        sorted,
+      };
+    }
+
+    const parsed = parseYamlToConfig(activeCandidate.yaml);
+    if (!parsed) {
+      return {
+        activeVersion: "default",
+        activeYaml: defaultConfigYaml,
+        activeConfig: defaultConfig,
+        sorted,
+      };
+    }
+
+    return {
+      activeVersion: activeCandidate.version,
+      activeYaml: activeCandidate.yaml,
+      activeConfig: parsed,
+      sorted,
+    };
+  }
+
+  async addConfigIfChanged(yamlText: string) {
+    const { index, indexSha, configs } = await this.loadIndexAndConfigs();
+    const baselineYaml = index.activeVersion
+      ? configs.find((item) => item.version === index.activeVersion)?.yaml ?? resolveActiveFromList(configs).activeYaml
+      : resolveActiveFromList(configs).activeYaml;
+
+    if (yamlText.trim() === baselineYaml.trim()) {
+      return { added: false, stored: sortConfigsDesc(configs) };
+    }
+
+    const parsed = parseYamlToConfig(yamlText);
+    if (!parsed) {
+      return { added: false, stored: configs };
+    }
+
+    const version = timestampVersion();
+    const fileName = version;
+
+    const fileSha = await this.putContent(fileName, yamlText);
+
+    const entry: WebdavIndexEntry = {
+      version,
+      file: fileName,
+      sha: fileSha,
+      mtime: new Date().toISOString(),
+      size: yamlText.length,
+    };
+
+    const nextIndex: WebdavIndex = {
+      activeVersion: version,
+      entries: [...index.entries.filter((item) => item.version !== version), entry],
+    };
+
+    await this.putIndex(nextIndex, indexSha);
+
+    const nextConfigs = sortConfigsDesc([...configs.filter((item) => item.version !== version), { version, yaml: yamlText }]);
+
+    return { added: true, stored: nextConfigs, newVersion: version };
+  }
+
+  async deleteConfigByVersion(version: string) {
+    const { index, indexSha, configs } = await this.loadIndexAndConfigs();
+    const target = index.entries.find((item) => item.version === version);
+
+    if (target) {
+      try {
+        let sha = target.sha;
+        if (!sha) {
+          const fetched = await this.fetchContent(target.file);
+          sha = fetched?.sha;
+        }
+        if (sha) {
+          await this.deleteContent(target.file, sha);
+        } else {
+          console.warn("Missing sha for GitHub delete", target.file);
+        }
+      } catch (error) {
+        console.error("Failed to delete GitHub version file", version, error);
+      }
+    }
+
+    const nextEntries = index.entries.filter((item) => item.version !== version);
+    const remainingConfigs = configs.filter((item) => item.version !== version);
+    const resolved = resolveActiveFromList(remainingConfigs);
+
+    const nextIndex: WebdavIndex = {
+      activeVersion: resolved.activeVersion === "default" ? undefined : resolved.activeVersion,
+      entries: nextEntries,
+    };
+
+    await this.putIndex(nextIndex, indexSha);
+    return resolved;
+  }
+
+  async saveStoredConfigs(configs: StoredConfig[]): Promise<void> {
+    const { indexSha } = await this.loadIndexAndConfigs();
+    if (configs.length === 0) {
+      const index: WebdavIndex = { activeVersion: undefined, entries: [] };
+      await this.putIndex(index, indexSha);
+      return;
+    }
+
+    const entries: WebdavIndexEntry[] = [];
+    for (const config of configs) {
+      const sha = await this.putContent(config.version, config.yaml);
+      entries.push({
+        version: config.version,
+        file: config.version,
+        sha,
+        mtime: new Date().toISOString(),
+        size: config.yaml.length,
+      });
+    }
+
+    const latest = resolveActiveFromList(configs);
+    const index: WebdavIndex = {
+      activeVersion: latest.activeVersion === "default" ? undefined : latest.activeVersion,
+      entries,
+    };
+    await this.putIndex(index, indexSha);
+  }
+}
+
 export const loadStorageSettings = (): StorageSettings => {
   if (typeof window === "undefined") return defaultStorageSettings;
   const raw = window.localStorage.getItem(STORAGE_SETTINGS_KEY);
@@ -769,11 +1083,16 @@ export const loadStorageSettings = (): StorageSettings => {
   try {
     const parsed = JSON.parse(raw) as StorageSettings;
     if (!parsed || typeof parsed !== "object") return defaultStorageSettings;
+    const kind: StorageKind = parsed.kind === "webdav" || parsed.kind === "github" ? parsed.kind : "browser";
     return {
-      kind: parsed.kind === "webdav" ? "webdav" : "browser",
+      kind,
       webdav: {
         ...defaultWebdavSettings,
         ...(parsed.webdav ?? {}),
+      },
+      github: {
+        ...defaultGithubSettings,
+        ...(parsed.github ?? {}),
       },
     };
   } catch (error) {
@@ -790,6 +1109,10 @@ export const saveStorageSettings = (settings: StorageSettings) => {
       ...defaultWebdavSettings,
       ...(settings.webdav ?? {}),
     },
+    github: {
+      ...defaultGithubSettings,
+      ...(settings.github ?? {}),
+    },
   };
   window.localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(normalized));
 };
@@ -803,6 +1126,15 @@ export const createStorage = (settings?: StorageSettings): ConfigStorage => {
     };
     if (webdavSettings.endpoint && webdavSettings.remotePath) {
       return new WebdavConfigStorage(webdavSettings);
+    }
+  }
+  if (current.kind === "github") {
+    const githubSettings = {
+      ...defaultGithubSettings,
+      ...(current.github ?? {}),
+    };
+    if (githubSettings.owner && githubSettings.repo && githubSettings.branch && githubSettings.remotePath && githubSettings.token) {
+      return new GithubConfigStorage(githubSettings);
     }
   }
   return new BrowserConfigStorage();
