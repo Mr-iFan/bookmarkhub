@@ -124,7 +124,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#fdfbf5] text-slate-900">
-      <div className="flex w-full max-w-none flex-col gap-6">
+      <div className="flex w-full max-w-none flex-col gap-6 min-h-screen">
         <section className="border border-dashed border-[#b7bcc2] bg-white/80 p-0">
           <div className="flex w-full flex-col items-stretch gap-2 px-0 py-0 md:flex-row md:items-center md:gap-0 md:px-0">
             <div className="order-1 flex flex-wrap items-center md:flex-nowrap">
@@ -175,8 +175,8 @@ export default function Home() {
           </div>
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-12">
-          <div className="h-screen lg:col-span-2 xl:col-span-2">
+        <div className="grid flex-1 auto-rows-fr items-stretch gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-2 xl:col-span-2 flex h-full flex-col overflow-hidden">
             <SidebarTree
               categories={categoryTree}
               selectedCategoryId={selectedCategory}
@@ -184,10 +184,10 @@ export default function Home() {
             />
 
           </div>
-          <main className="lg:col-span-10 xl:col-span-10">
+          <main className="lg:col-span-10 xl:col-span-10 flex h-full flex-col overflow-hidden border border-dashed border-[#b7bcc2] bg-white/90">
             <div
               ref={contentRef}
-              className="flex h-full flex-col gap-4 overflow-y-auto border border-dashed border-[#b7bcc2] bg-white/90 p-5"
+              className="flex h-full flex-col gap-4 overflow-y-auto bg-white/90 p-5"
             >
               {filteredBookmarks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-6 py-10 text-center text-slate-600">

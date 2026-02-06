@@ -332,13 +332,10 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-[#fdfbf5] text-slate-900">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 min-h-screen">
         <NoticeBar notice={notice} />
         <header className="flex items-center justify-between border border-dashed border-[#b7bcc2] bg-white/80 px-4 py-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Settings</p>
-            <h1 className="text-xl font-semibold text-slate-900">配置中心</h1>
-          </div>
+          <h1 className="text-xl font-semibold text-slate-900">配置中心</h1>
           <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
             <span className="border border-dashed border-[#b7bcc2] bg-[#fdfbf5] px-3 py-1">当前版本：{activeVersion}</span>
             <div className="flex items-center gap-2">
@@ -382,8 +379,8 @@ export default function SettingsPage() {
           onSaveGithubConfig={handleSaveGithubConfig}
         />
 
-        <section className="grid gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-7 flex flex-col gap-3 border border-dashed border-[#b7bcc2] bg-white/90 p-4">
+        <section className="grid flex-1 auto-rows-fr items-stretch gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-7 flex h-full flex-col gap-3 border border-dashed border-[#b7bcc2] bg-white/90 p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-slate-900">编辑 YAML</h2>
               <div className="flex items-center gap-2 text-sm">
@@ -406,14 +403,14 @@ export default function SettingsPage() {
               </div>
             </div>
             <textarea
-              className="h-[480px] w-full border border-dashed border-[#b7bcc2] bg-[#fdfbf5] p-3 font-mono text-sm text-slate-800 focus:outline-none"
+              className="flex-1 min-h-[480px] w-full border border-dashed border-[#b7bcc2] bg-[#fdfbf5] p-3 font-mono text-sm text-slate-800 focus:outline-none"
               value={yamlInput}
               onChange={(e) => setYamlInput(e.target.value)}
               disabled={loading}
             />
           </div>
 
-          <div className="lg:col-span-5 flex flex-col gap-3 border border-dashed border-[#b7bcc2] bg-white/90 p-4">
+          <div className="lg:col-span-5 flex h-full flex-col gap-3 border border-dashed border-[#b7bcc2] bg-white/90 p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-slate-900">历史配置</h2>
               <span className="text-xs text-slate-500">点击删除会回退到最新可用</span>

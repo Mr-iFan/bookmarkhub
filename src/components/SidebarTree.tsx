@@ -25,7 +25,7 @@ export default function SidebarTree({ categories, selectedCategoryId, onSelect }
     const isActive = selectedCategoryId === node.id;
 
     const wrapperClasses = depth === 0
-      ? "border-x border-t border-dashed border-[#b7bcc2] bg-[#fdfbf5] last:border-b"
+      ? "border-l border-t border-dashed border-[#b7bcc2] bg-[#fdfbf5] last:border-b first:border-t-0"
       : "border-t border-dashed border-[#b7bcc2] bg-[#fdfbf5] last:border-b";
 
     return (
@@ -70,5 +70,9 @@ export default function SidebarTree({ categories, selectedCategoryId, onSelect }
     );
   };
 
-  return <div>{categories.map((root, idx, arr) => renderNode(root, 0, idx === arr.length - 1))}</div>;
+  return (
+    <div className="flex h-full flex-col overflow-y-auto border border-dashed border-[#b7bcc2] bg-white/90">
+      {categories.map((root, idx, arr) => renderNode(root, 0, idx === arr.length - 1))}
+    </div>
+  );
 }
