@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --require ./tests/register-yaml.js --import tsx --test tests/github-storage.test.ts"
   },
   "dependencies": {
     "next": "16.1.6",
@@ -23,6 +24,7 @@
     "eslint-config-next": "16.1.6",
     "raw-loader": "^4.0.2",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

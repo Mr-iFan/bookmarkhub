@@ -212,7 +212,18 @@ export default function SettingsPage() {
     };
     setStorageSettings(next);
     saveStorageSettings(next);
-    refreshFromStorage(next);
+    const shouldRefreshGithub =
+      kind !== "github" ||
+      Boolean(
+        next.github?.owner &&
+          next.github?.repo &&
+          next.github?.branch &&
+          next.github?.remotePath &&
+          next.github?.token,
+      );
+    if (shouldRefreshGithub) {
+      refreshFromStorage(next);
+    }
   };
 
   const handleWebdavFieldChange = (field: keyof NonNullable<StorageSettings["webdav"]>, value: string) => {
@@ -348,7 +359,6 @@ export default function SettingsPage() {
               >
                 <option value="browser">浏览器</option>
                 <option value="webdav">WebDAV</option>
-                <option value="github">GitHub</option>
               </select>
             </div>
             <button

@@ -804,19 +804,33 @@ class GithubConfigStorage extends ConfigStorage {
     return `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
   }
 
-  private async fetchContent(fileName: string): Promise<GithubContent | null> {
+  private async fetchContentDetailed(fileName: string): Promise<{ status: number; ok: boolean; content?: string; sha?: string }> {
     const url = `${this.contentUrl(fileName)}?ref=${encodeURIComponent(this.settings.branch)}`;
     const response = await fetch(url, { headers: this.headers() });
-    if (response.status === 404) return null;
-    if (!response.ok) {
-      throw new Error(`GitHub load failed: ${response.status}`);
+
+    if (!response.ok && response.status !== 404) {
+      return { status: response.status, ok: false };
     }
+
+    if (response.status === 404) {
+      return { status: response.status, ok: false };
+    }
+
     const json = (await response.json()) as { content?: string; sha?: string };
     const content = json.content ? fromBase64(json.content) : "";
-    return { content, sha: typeof json.sha === "string" ? json.sha : undefined };
+    return { status: response.status, ok: true, content, sha: typeof json.sha === "string" ? json.sha : undefined };
   }
 
-  private async putContent(fileName: string, content: string, sha?: string) {
+  private async fetchContent(fileName: string): Promise<GithubContent | null> {
+    const detailed = await this.fetchContentDetailed(fileName);
+    if (detailed.status === 404) return null;
+    if (!detailed.ok) {
+      throw new Error(`GitHub load failed: ${detailed.status}`);
+    }
+    return { content: detailed.content ?? "", sha: detailed.sha };
+  }
+
+  private async putContent(fileName: string, content: string, sha?: string, options?: { allowConflict?: boolean }) {
     const url = this.contentUrl(fileName);
     const body: Record<string, unknown> = {
       message: `bookmarkhub: update ${fileName}`,
@@ -835,6 +849,10 @@ class GithubConfigStorage extends ConfigStorage {
     });
 
     if (!response.ok) {
+      if (options?.allowConflict && (response.status === 409 || response.status === 422)) {
+        console.warn("GitHub content already exists", fileName, response.status);
+        return undefined;
+      }
       throw new Error(`GitHub save failed: ${response.status}`);
     }
 
@@ -862,6 +880,109 @@ class GithubConfigStorage extends ConfigStorage {
     }
   }
 
+  private async getBranchSha(branch: string, allowMissing = false): Promise<string | null> {
+    const owner = encodeURIComponent(this.settings.owner);
+    const repo = encodeURIComponent(this.settings.repo);
+    const branchPath = encodeURIComponent(branch);
+    const url = `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branchPath}`;
+    const response = await fetch(url, { headers: this.headers() });
+    if (response.status === 404 && allowMissing) {
+      return null;
+    }
+    if (!response.ok) {
+      const hint = response.status === 404 ? "（分支不存在，或仓库/Token 权限不足导致 404）" : "";
+      throw new Error(`获取分支 ${branch} 失败：${response.status}${hint}`);
+    }
+    const json = (await response.json()) as { object?: { sha?: string }; sha?: string };
+    const sha = typeof json?.object?.sha === "string" ? json.object.sha : typeof json?.sha === "string" ? json.sha : undefined;
+    if (!sha) {
+      throw new Error(`获取分支 ${branch} 失败：缺少提交信息`);
+    }
+    return sha;
+  }
+
+  private async getDefaultBranchName(): Promise<string> {
+    const owner = encodeURIComponent(this.settings.owner);
+    const repo = encodeURIComponent(this.settings.repo);
+    const url = `https://api.github.com/repos/${owner}/${repo}`;
+    const response = await fetch(url, { headers: this.headers() });
+    if (!response.ok) {
+      const hint = response.status === 404 ? "（仓库不存在，或 Token 无 repo 权限导致 404）" : "";
+      throw new Error(`获取仓库信息失败：${response.status}${hint}`);
+    }
+    const json = (await response.json()) as { default_branch?: string };
+    const branch = typeof json?.default_branch === "string" ? json.default_branch : undefined;
+    if (!branch) {
+      throw new Error("获取默认分支失败：缺少 default_branch");
+    }
+    return branch;
+  }
+
+  private async ensureTargetBranch(): Promise<void> {
+    const existingSha = await this.getBranchSha(this.settings.branch, true);
+    if (existingSha) return;
+
+    const baselineBranch = await this.getDefaultBranchName();
+    const baselineSha = await this.getBranchSha(baselineBranch);
+
+    const owner = encodeURIComponent(this.settings.owner);
+    const repo = encodeURIComponent(this.settings.repo);
+    const url = `https://api.github.com/repos/${owner}/${repo}/git/refs`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.headers(),
+      },
+      body: JSON.stringify({ ref: `refs/heads/${this.settings.branch}`, sha: baselineSha }),
+    });
+
+    if (response.ok) {
+      console.info("GitHub 分支已创建", this.settings.branch, "from", baselineBranch);
+      return;
+    }
+
+    if (response.status === 409 || response.status === 422) {
+      console.info("GitHub 分支已存在，跳过创建", this.settings.branch);
+      return;
+    }
+
+    throw new Error(`创建分支 ${this.settings.branch} 失败：${response.status}`);
+  }
+
+  private async recoverMissingIndex(): Promise<{ index: WebdavIndex; sha?: string }> {
+    console.warn("检测到 GitHub 配置文件 404，启动补偿流程", {
+      owner: this.settings.owner,
+      repo: this.settings.repo,
+      branch: this.settings.branch,
+    });
+
+    await this.ensureTargetBranch();
+
+    const retry = await this.fetchContentDetailed(INDEX_FILE);
+    if (retry.ok && retry.content !== undefined) {
+      console.info("GitHub 配置文件已存在，跳过初始化");
+      return { index: this.sanitizeIndex(JSON.parse(retry.content) as WebdavIndex), sha: retry.sha };
+    }
+
+    const emptyIndex: WebdavIndex = { activeVersion: undefined, entries: [] };
+
+    try {
+      await this.putContent(INDEX_FILE, JSON.stringify(emptyIndex), undefined, { allowConflict: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`初始化 GitHub 配置文件失败：${message}`);
+    }
+
+    const afterPut = await this.fetchContentDetailed(INDEX_FILE);
+    if (!afterPut.ok || afterPut.content === undefined) {
+      throw new Error("初始化后仍未找到 GitHub 配置文件");
+    }
+
+    console.info("GitHub 配置文件已初始化", INDEX_FILE);
+    return { index: this.sanitizeIndex(JSON.parse(afterPut.content) as WebdavIndex), sha: afterPut.sha };
+  }
+
   private sanitizeIndex(parsed: WebdavIndex): WebdavIndex {
     const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
     const filtered = entries.filter((item): item is WebdavIndexEntry => {
@@ -874,16 +995,22 @@ class GithubConfigStorage extends ConfigStorage {
   }
 
   private async loadIndex(): Promise<{ index: WebdavIndex; sha?: string }> {
-    const result = await this.fetchContent(INDEX_FILE);
-    if (!result) {
-      return { index: { activeVersion: undefined, entries: [] }, sha: undefined };
+    const detailed = await this.fetchContentDetailed(INDEX_FILE);
+
+    if (detailed.status === 404) {
+      return this.recoverMissingIndex();
     }
+
+    if (!detailed.ok || detailed.content === undefined) {
+      throw new Error(`GitHub index load failed: ${detailed.status}`);
+    }
+
     try {
-      const parsed = JSON.parse(result.content) as WebdavIndex;
-      return { index: this.sanitizeIndex(parsed), sha: result.sha };
+      const parsed = JSON.parse(detailed.content) as WebdavIndex;
+      return { index: this.sanitizeIndex(parsed), sha: detailed.sha };
     } catch (error) {
       console.error("Failed to parse GitHub index", error);
-      return { index: { activeVersion: undefined, entries: [] }, sha: result.sha };
+      return { index: { activeVersion: undefined, entries: [] }, sha: detailed.sha };
     }
   }
 
@@ -1133,9 +1260,16 @@ export const createStorage = (settings?: StorageSettings): ConfigStorage => {
       ...defaultGithubSettings,
       ...(current.github ?? {}),
     };
-    if (githubSettings.owner && githubSettings.repo && githubSettings.branch && githubSettings.remotePath && githubSettings.token) {
+    if (
+      githubSettings.owner &&
+      githubSettings.repo &&
+      githubSettings.branch &&
+      githubSettings.remotePath &&
+      githubSettings.token
+    ) {
       return new GithubConfigStorage(githubSettings);
     }
+    throw new Error("GitHub 存储配置不完整，请填写 owner/repo/branch/token/目录");
   }
   return new BrowserConfigStorage();
 };
