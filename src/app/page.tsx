@@ -100,7 +100,7 @@ export default function Home() {
   const filteredBookmarks = useMemo(() => {
     if (isSearching) {
       return moduleBookmarks.filter((bookmark) => {
-        const haystack = `${bookmark.title ?? ""} ${bookmark.url ?? ""} ${bookmark.description ?? ""}`.toLowerCase();
+        const haystack = `${bookmark.name ?? ""} ${bookmark.url ?? ""} ${bookmark.description ?? ""}`.toLowerCase();
         return haystack.includes(normalizedSearch);
       });
     }

@@ -8,7 +8,7 @@ type StoredConfig = {
 };
 
 type YamlLink = {
-  title?: string;
+  name?: string;
   url?: string;
   description?: string;
 };
@@ -83,14 +83,14 @@ const buildAppConfigFromBookmarkhub = (data: BookmarkhubRoot): AppConfig | null 
     if (!Array.isArray(links)) return;
 
     links.forEach((link, index) => {
-      if (!link?.title || !link?.url) return;
-      const linkSlug = slugify(link.title) || `url-${index + 1}`;
+      if (!link?.name || !link?.url) return;
+      const linkSlug = slugify(link.name) || `url-${index + 1}`;
       const bookmarkBase = [...path, linkSlug].join("__");
       const bookmarkId = uniqueId(bookmarkBase, usedBookmarkIds);
 
       bookmarksList.push({
         id: bookmarkId,
-        title: link.title,
+        name: link.name,
         url: link.url,
         description: link.description ?? "",
         moduleId,

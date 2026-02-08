@@ -20,7 +20,7 @@ export type AppConfig = {
 
 export type Bookmark = {
   id: string;
-  title: string;
+  name: string;
   url: string;
   description: string;
   moduleId: string;
