@@ -7,11 +7,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      VITE_BASE: /bookmarkhub/
-      VITE_GITHUB_OWNER: Mr-iFan
-      VITE_GITHUB_REPO: bookmarkhub
-      VITE_GITHUB_BRANCH: main
-      VITE_STORAGE_DEFAULT: local
+      NEXT_BASE_PATH: /bookmarkhub
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,7 +15,6 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run build
-      - run: cp -r out/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out
