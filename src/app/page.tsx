@@ -69,6 +69,8 @@ export default function Home() {
     return config.categories.filter((item) => item.moduleId === selectedModule);
   }, [config, selectedModule]);
 
+  const validCategoryIds = useMemo(() => new Set(moduleCategories.map((item) => item.id)), [moduleCategories]);
+
   const parentMap = useMemo(() => {
     const map = new Map<string, string | undefined>();
     moduleCategories.forEach((item) => {
@@ -105,6 +107,38 @@ export default function Home() {
 
     return moduleBookmarks;
   }, [isSearching, moduleBookmarks, normalizedSearch]);
+
+  const groupedBookmarks = useMemo(() => {
+    const buckets = new Map<string, typeof filteredBookmarks>();
+
+    filteredBookmarks.forEach((bookmark) => {
+      const bucketKey = validCategoryIds.has(bookmark.categoryId) ? bookmark.categoryId : "uncategorized";
+      const existing = buckets.get(bucketKey) ?? [];
+      existing.push(bookmark);
+      buckets.set(bucketKey, existing);
+    });
+
+    const groups: {
+      id: string;
+      name: string;
+      lineage?: string[];
+      items: typeof filteredBookmarks;
+    }[] = [];
+
+    moduleCategories.forEach((category) => {
+      const items = buckets.get(category.id);
+      if (items?.length) {
+        groups.push({ id: category.id, name: category.name, lineage: getCategoryLineage(category.id), items });
+      }
+    });
+
+    const uncategorized = buckets.get("uncategorized");
+    if (uncategorized?.length) {
+      groups.push({ id: "uncategorized", name: "未分类", items: uncategorized });
+    }
+
+    return groups;
+  }, [filteredBookmarks, moduleCategories, validCategoryIds, getCategoryLineage]);
 
   const handleCategorySelect = (categoryId: string | null) => {
     setSelectedCategory(categoryId);
@@ -199,21 +233,28 @@ export default function Home() {
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-3">
-                  {filteredBookmarks.map((bookmark) => {
-                    const categoryName = categoryNameMap.get(bookmark.categoryId);
-                    const moduleName = moduleNameMap.get(bookmark.moduleId);
-                    const categoryLineage = getCategoryLineage(bookmark.categoryId);
-                    return (
-                      <div key={bookmark.id} data-category-match={categoryLineage.join(" ")}>
-                        <BookmarkCard
-                          bookmark={bookmark}
-                          moduleName={moduleName}
-                          categoryName={categoryName}
-                        />
+                <div className="flex flex-col gap-6">
+                  {groupedBookmarks.map((group) => (
+                    <div key={group.id} data-category-match={group.lineage?.join(" ")} className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-dashed border-[#b7bcc2] pb-2">
+                        <h4 className="text-sm font-semibold text-slate-800">{group.name}</h4>
                       </div>
-                    );
-                  })}
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        {group.items.map((bookmark) => {
+                          const categoryName = categoryNameMap.get(bookmark.categoryId);
+                          const moduleName = moduleNameMap.get(bookmark.moduleId);
+                          return (
+                            <BookmarkCard
+                              key={bookmark.id}
+                              bookmark={bookmark}
+                              moduleName={moduleName}
+                              categoryName={categoryName}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
