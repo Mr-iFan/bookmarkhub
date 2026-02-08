@@ -83,14 +83,15 @@ const buildAppConfigFromBookmarkhub = (data: BookmarkhubRoot): AppConfig | null 
     if (!Array.isArray(links)) return;
 
     links.forEach((link, index) => {
-      if (!link?.name || !link?.url) return;
-      const linkSlug = slugify(link.name) || `url-${index + 1}`;
+      if (!link?.url) return;
+      const linkName = link.name?.trim() || link.url;
+      const linkSlug = slugify(linkName) || `url-${index + 1}`;
       const bookmarkBase = [...path, linkSlug].join("__");
       const bookmarkId = uniqueId(bookmarkBase, usedBookmarkIds);
 
       bookmarksList.push({
         id: bookmarkId,
-        name: link.name,
+        name: linkName,
         url: link.url,
         description: link.description ?? "",
         moduleId,
